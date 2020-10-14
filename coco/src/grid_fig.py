@@ -25,13 +25,20 @@ parser.add_argument('--dataset_type',type=str,default='MS-COCO')
 parser.add_argument('--batch_size',type=int,default=64)
 parser.add_argument('--th',type=float,default=0.7)
 
-def random_example(dataset, model, scores_to_labels):
+def random_example(dataset, model, scores_to_labels, corr, classes_list):
     i = random.randint(0,len(dataset)-1) 
     img = dataset[i][0]
-    est_labels = scores_to_labels(model(img.unsqueeze(0).cuda()).cpu())
-    return img.permute(1,2,0), est_labels 
+    ann = dataset[i][1][0]
 
-def gridplot_imgs(imgs,labels,rows,cols):
+    labels = []
+    annotations = dataset.coco.getAnnIds(imgIds=int(ann['image_id'])) 
+    for annotation in dataset.coco.loadAnns(annotations):
+        labels = labels + [classes_list[corr[annotation['category_id']]]]
+    labels = list(np.unique(np.array(labels)))
+    est_labels = scores_to_labels(model(img.unsqueeze(0).cuda()).cpu())
+    return img.permute(1,2,0), est_labels, [labels]
+
+def gridplot_imgs(imgs,est_labels,labels,rows,cols):
     fig, axs = plt.subplots(nrows=rows,ncols=cols,figsize=(cols*10,rows*10))
     props = dict(boxstyle='round', facecolor='white', alpha=0.8)
     for idx, img in enumerate(imgs):
@@ -39,13 +46,28 @@ def gridplot_imgs(imgs,labels,rows,cols):
         c = idx % cols
         axs[r,c].axis('off')
         axs[r,c].imshow(img, aspect='equal')
-        labelstr = ""
-        for i in range(len(labels[idx])):
-            labelstr += labels[idx][i]
-            if i < len(labels[idx])-1:
-                labelstr += '\n'
+        corr_labelstr = ""
+        est_labelstr = ""
+        all_labelstr = ""
+        for i in range(len(est_labels[idx])):
+            all_labelstr += est_labels[idx][i] + '\n'
+            est_labelstr += est_labels[idx][i] + '\n'
+            if est_labels[idx][i] in labels[idx]:
+                corr_labelstr += est_labels[idx][i] + '\n'
 
-        axs[r,c].text(0.05,0.95,labelstr,transform=axs[r,c].transAxes,fontsize=32,verticalalignment='top',bbox=props)
+        for i in range(len(labels[idx])):
+            if labels[idx][i] not in est_labels[idx]:
+                all_labelstr += labels[idx][i] + '\n'
+
+        all_labelstr = all_labelstr[0:-1]
+        est_labelstr = est_labelstr[0:-1]
+        corr_labelstr = corr_labelstr[0:-1] 
+
+        # Make a fake bbox first.
+        axs[r,c].text(0.05,0.95,all_labelstr,transform=axs[r,c].transAxes,fontsize=32,color='r',verticalalignment='top',bbox=props)
+        axs[r,c].text(0.05,0.95,est_labelstr,transform=axs[r,c].transAxes,fontsize=32,color='b',verticalalignment='top')
+        axs[r,c].text(0.05,0.95,corr_labelstr,transform=axs[r,c].transAxes,fontsize=32,color='k',verticalalignment='top')
+
     plt.subplots_adjust(wspace=0.05,hspace=0.05)
     plt.savefig('../outputs/grid_fig.pdf')
 
@@ -56,9 +78,6 @@ if __name__ == "__main__":
 
         dataset = tv.datasets.CocoDetection('../data/val2017','../data/annotations_trainval2017/instances_val2017.json',transform=tv.transforms.Compose([tv.transforms.Resize((args.input_size, args.input_size)),
                                                                                                                                                          tv.transforms.ToTensor()]))
-        dataloader = torch.utils.data.DataLoader(dataset,batch_size=args.batch_size,shuffle=False)
-        print('Dataset Loaded')
-
         state = torch.load('../models/MS_COCO_TResNet_xl_640_88.4.pth', map_location='cpu')
         classes_list = np.array(list(state['idx_to_class'].values()))
         args.num_classes = state['num_classes']
@@ -66,6 +85,7 @@ if __name__ == "__main__":
         model.load_state_dict(state['model'], strict=True)
         model.eval()
         print('Model Loaded')
+        corr = get_correspondence(classes_list,dataset.coco.cats)
 
         rows = 2
         cols = 5 
@@ -80,9 +100,11 @@ if __name__ == "__main__":
             return est_labels
 
         imgs = []
+        est_labels = []
         labels = []
         for i in range(rows*cols):
-            img, label = random_example(dataset,model,scores_to_labels)
+            img, est_label, label = random_example(dataset,model,scores_to_labels,corr,classes_list)
             imgs = imgs + [img]
+            est_labels = est_labels + est_label
             labels = labels + label
-        gridplot_imgs(imgs,labels,rows,cols)
+        gridplot_imgs(imgs,est_labels,labels,rows,cols)
