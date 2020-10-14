@@ -20,5 +20,6 @@ dependencies:
     - detectron2
     - pyyaml=5.1
     - pycocotools>=2.0.1
+    - seaborn=0.11.0
     - pip:
         - "--editable=git+https://github.com/mapillary/inplace_abn.git@v1.0.11#egg=inplace_abn"
