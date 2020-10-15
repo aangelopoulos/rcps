@@ -163,6 +163,15 @@ def validate_precomputed(val_loader, label_estimator, nStop, print_bool):
 
     return precbar.avg, recbar.avg, sizebar.avg
 
+def validate_precomputed_oneshot(scores,labels, label_estimator):
+    with torch.no_grad():
+        est_labels = label_estimator(scores)
+        prec, rec, size = get_metrics_precomputed(est_labels,labels)
+
+        cvg = rec == 1.0
+
+    return prec, rec, size 
+
 def fix_randomness(seed):
     np.random.seed(seed=seed)
     torch.manual_seed(seed)

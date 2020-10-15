@@ -27,12 +27,12 @@ parser.add_argument('--dataset_type',type=str,default='MS-COCO')
 parser.add_argument('--batch_size',type=int,default=5000)
 parser.add_argument('--th',type=float,default=0.7)
 
-def R_to_t(R,delta,num_val):
-    return R - binom.ppf(delta/np.e,num_val,R)/num_val
+def R_to_t(R,delta,num_calib):
+    return R - binom.ppf(delta/np.e,num_calib,R)/num_calib
 
-def searchR(Rhat,gamma,delta,num_val,epsilon):
+def searchR(Rhat,gamma,delta,num_calib,epsilon):
     def _condition(R):
-        return Rhat + R_to_t(R,delta,num_val) < gamma
+        return Rhat + R_to_t(R,delta,num_calib) < gamma
     lbR = 0
     ubR = 1
     R = 0.5
@@ -43,75 +43,83 @@ def searchR(Rhat,gamma,delta,num_val,epsilon):
         else:
             lbR = R
             R = (ubR+lbR)/2
+    lbR = max(lbR,epsilon)
     return lbR
 
 # Returns tlambda table 
-def get_tlambda():
-    npts = 10000
+def get_tlambda(npts,num_calib):
     tlambda_fname = '../.cache/tlambda_table.pkl'
     if os.path.exists(tlambda_fname):
         tlams = pkl.load(open(tlambda_fname,'rb'))
         print("tlambda precomputed!")
     else:
-        gamma_minus_rhats = np.linspace(-1,1,npts)
-        deltas = np.linspace(-1,1,npts)
-        tlams = np.zeros((npts,npts))
-        num_val = 4000
+        gamma_minus_rhats = np.linspace(0,0.2,npts)
+        deltas = np.array([0.1,0.05,0.01,0.001]) 
+        tlams = np.zeros((npts,4))
         print("computing tlambda")
         for i in tqdm(range(tlams.shape[0])):
             for j in range(tlams.shape[1]):
-                R = searchR(0,gamma_minus_rhats[i],deltas[j],num_val,0.001)
-                tlams[i,j] = R_to_t(R,delta,num_val) 
+                R = searchR(0,gamma_minus_rhats[i],deltas[j],num_calib,0.0001)
+                tlams[i,j] = R_to_t(R,delta,num_calib) 
         pkl.dump(tlams,open(tlambda_fname,'wb'))
 
     def _tlambda(gam_minus_rhat,delt):
-        g = np.ceil((gam_minus_rhat + 1)/2 * npts) 
-        d = np.ceil((delt + 1)/2 * npts)
-        return tlams[int(g),int(d)]
+        g = int(np.ceil(gam_minus_rhat/0.2 * npts)) 
+        d = None 
+        if delt == 0.1:
+            d = 0
+        elif delt == 0.05:
+            d = 1
+        elif delt == 0.01:
+            d = 2
+        elif delt == 0.001:
+            d = 3
+        else:
+            raise NotImplemented
+        #print(f"gmr:{gam_minus_rhat.item()}, g:{g},tlam:{tlams[g,d]}")
+        return tlams[g,d]
 
     return _tlambda
 
-def get_lamhat_precomputed(dataloader, gamma, delta, num_lam, num_val, tlambda):
+def get_lamhat_precomputed(scores, labels, gamma, delta, num_lam, num_calib, tlambda):
     lams = torch.linspace(0,1,num_lam)
-    tlam = torch.zeros_like(lams)
-    Rhatlam = torch.zeros_like(lams)
+    lam = None
     for i in range(lams.shape[0]):
         lam = lams[i]
-        def _label_estimator(x):
-            return (x > lam).to(float)
-        prec, rec, sz = validate_precomputed(dataloader, _label_estimator, nStop=num_val, print_bool=False)
-        Rhatlam[i] = 1-rec
-        tlam[i] = tlambda(gamma-Rhatlam[i],delta) 
+        est_labels = (scores > lam).to(float) 
+        avg_acc = (est_labels * labels/labels.sum()).sum()
+        Rhat = 1-avg_acc
+        if Rhat >= gamma:
+            break
+        if Rhat + tlambda(gamma-Rhat,delta) >= gamma:
+            break
+        #print(f"Rhat:{Rhat}, tlambda:{tlambda(gamma-Rhat,delta)}, gamma:{gamma}")
 
-    lamhat_idxs = np.argwhere(Rhatlam+tlam < gamma)
-    if lamhat_idxs.shape[0] == 0:
-        return torch.Tensor([0.0])
-    lamhat_idx = lamhat_idxs[-1]
-    if lamhat_idx.shape[0] == 0:
-        return torch.Tensor([0.0])
-    return lams[lamhat_idx[-1]] 
+    return lam 
 
-def trial_precomputed(dataset,gamma,delta,num_lam,num_val,batch_size,tlambda):
-    total = len(dataset)
-    calib_data, val_data = torch.utils.data.random_split(dataset, [num_val,total-num_val])
-    calib_dataloader = torch.utils.data.DataLoader(calib_data,batch_size=batch_size,shuffle=False)
-    val_dataloader = torch.utils.data.DataLoader(val_data,batch_size=batch_size,shuffle=False)
+def trial_precomputed(scores,labels,gamma,delta,num_lam,num_calib,batch_size,tlambda):
+    total=scores.shape[0]
+    perm = torch.randperm(scores.shape[0])
+    scores = scores[perm]
+    labels = labels[perm]
+    calib_scores, val_scores = (scores[0:num_calib], scores[num_calib:])
+    calib_labels, val_labels = (labels[0:num_calib], labels[num_calib:])
 
-    lhat = get_lamhat_precomputed(calib_dataloader, gamma, delta, num_lam, num_val, tlambda)
-    def label_estimator(x):
-        return (x > lhat).to(float)
-
-    prec, rec, sz = validate_precomputed(val_dataloader,label_estimator,nStop=100000,print_bool=False) 
-    return prec, rec, sz, lhat.item()
+    lhat = get_lamhat_precomputed(calib_scores, calib_labels, gamma, delta, num_lam, num_calib, tlambda)
+    est_labels = (val_scores > lhat).to(float)
+    prec, rec, size = get_metrics_precomputed(est_labels,val_labels)
+    return prec.mean().item(), rec.mean().item(), size, lhat.item()
 
 def plot_histograms(df,gamma,delta):
     sns.displot(data=df, x="recall")
     plt.savefig(f'../outputs/histograms/{gamma}_{delta}_recall_histogram.pdf')
-    #plt.figure()
-    #sns.displot(data=df,x="size")
-    #plt.savefig(f'../outputs/histograms/{gamma}_{delta}_size_histogram.pdf')
 
-def experiment(gamma,delta,num_lam,num_val,epsilon,num_trials):
+    sizes = torch.cat(df['size'].tolist(),dim=0)
+    sns.displot(data=sizes)
+    plt.xlabel('size')
+    plt.savefig(f'../outputs/histograms/{gamma}_{delta}_size_histogram.pdf')
+
+def experiment(gamma,delta,num_lam,num_calib,epsilon,num_trials):
     fname = f'../.cache/{gamma}_{delta}_dataframe.pkl'
     df = pd.DataFrame(columns = ["$\\hat{\\lambda}$","precision","recall","size","gamma","delta"])
     try:
@@ -139,12 +147,13 @@ def experiment(gamma,delta,num_lam,num_val,epsilon,num_trials):
         else:
             dataset_precomputed = get_scores_targets(model, torch.utils.data.DataLoader(dataset,batch_size=1,shuffle=True), corr)
             pkl.dump(dataset_precomputed,open(dataset_fname,'wb'),protocol=pkl.HIGHEST_PROTOCOL)
+        scores, labels = dataset_precomputed.tensors
 
         # get the precomputed binary search
-        tlambda = get_tlambda()
+        tlambda = get_tlambda(num_lam,num_calib)
 
         for i in tqdm(range(num_trials)):
-            prec, rec, sz, lhat = trial_precomputed(dataset_precomputed,gamma,delta,num_lam,num_val,args.batch_size,tlambda)
+            prec, rec, sz, lhat = trial_precomputed(scores,labels,gamma,delta,num_lam,num_calib,args.batch_size,tlambda)
             df = df.append({"$\\hat{\\lambda}$": lhat,
                             "precision": prec,
                             "recall": rec,
@@ -166,23 +175,10 @@ if __name__ == "__main__":
         gammas = [0.05,0.1]
         deltas = [0.1,0.1]
         params = list(zip(gammas,deltas))
-        num_lam = 100 
-        num_val = 4000 
-        epsilon = 0.01
-        num_trials = 1000 
+        num_lam = 1000 
+        num_calib = 4000 
+        epsilon = 0.0001
+        num_trials = 100 
         for gamma, delta in params:
             print(f"\n\n\n ============           NEW EXPERIMENT gamma={gamma} delta={delta}           ============ \n\n\n") 
-            experiment(gamma,delta,num_lam,num_val,epsilon,num_trials)
-         
-        #estimate
-        #def label_estimator(x):
-        #    return (x > 0.857).to(float)
-        #validate_precomputed(torch.utils.data.DataLoader(dataset_precomputed,batch_size=args.batch_size,shuffle=True), label_estimator, nStop=100000, print_bool=True)
-        #pdb.set_trace()
-        #mAP = get_mAP(dataloader, model, corr, 20, args.batch_size, True)
-        #print(f"mAP: {mAP}")
-
-#        def label_estimator(x):
-#            return (x > 0.857).to(float)
-
-#        prec, rec, sz = validate(dataloader,model,label_estimator,corr,nStop=100000,print_bool=True) 
+            experiment(gamma,delta,num_lam,num_calib,epsilon,num_trials)
