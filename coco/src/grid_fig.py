@@ -73,11 +73,12 @@ def gridplot_imgs(imgs,est_labels,labels,rows,cols):
         corr_labelstr = corr_labelstr[0:-1] 
 
         # Make a fake bbox first.
-        axs[r,c].text(0.05,0.95,fake_labelstr,transform=axs[r,c].transAxes,fontsize=48,color='#00000000',verticalalignment='top',bbox=props)
-        axs[r,c].text(0.05,0.95,all_labelstr,transform=axs[r,c].transAxes,fontsize=48,color='#ff4555',verticalalignment='top')
-        axs[r,c].text(0.05,0.95,est_labelstr,transform=axs[r,c].transAxes,fontsize=48,color='#40B5BC',verticalalignment='top')
-        axs[r,c].text(0.05,0.95,corr_labelstr,transform=axs[r,c].transAxes,fontsize=48,color='k',verticalalignment='top')
+        axs[r,c].text(0.05,0.95,fake_labelstr,transform=axs[r,c].transAxes,fontsize=28,color='#00000000',verticalalignment='top',bbox=props)
+        axs[r,c].text(0.05,0.95,all_labelstr,transform=axs[r,c].transAxes,fontsize=28,color='#ff4555',verticalalignment='top')
+        axs[r,c].text(0.05,0.95,est_labelstr,transform=axs[r,c].transAxes,fontsize=28,color='#40B5BC',verticalalignment='top')
+        axs[r,c].text(0.05,0.95,corr_labelstr,transform=axs[r,c].transAxes,fontsize=28,color='k',verticalalignment='top')
 
+    plt.tight_layout()
     plt.subplots_adjust(wspace=0.05,hspace=0.05)
     plt.savefig('../outputs/grid_fig.pdf')
 
