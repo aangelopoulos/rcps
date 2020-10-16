@@ -40,7 +40,6 @@ def get_lamhat_precomputed(scores, labels, gamma, delta, num_lam, num_calib, tla
             break
         if Rhat + tlambda(Rhat,delta) >= gamma:
             break
-        #print(f"Rhat:{Rhat}, tlambda:{tlambda(gamma-Rhat,delta)}, gamma:{gamma}")
 
     return lam 
 
@@ -58,13 +57,19 @@ def trial_precomputed(scores,labels,gamma,delta,num_lam,num_calib,batch_size,tla
     return prec.mean().item(), rec.mean().item(), size, lhat.item()
 
 def plot_histograms(df,gamma,delta):
-    sns.displot(data=df, x="recall")
-    plt.savefig(f'../outputs/histograms/{gamma}_{delta}_recall_histogram.pdf')
+    fig, axs = plt.subplots(nrows=1,ncols=2,figsize=(6,1.5))
+    sns.histplot(data=df, x="recall", ax=axs[0])
+    sns.despine(ax=axs[0],top=True,right=True)
 
-    sizes = torch.cat(df['size'].tolist(),dim=0)
-    sns.displot(data=sizes)
-    plt.xlabel('size')
-    plt.savefig(f'../outputs/histograms/{gamma}_{delta}_size_histogram.pdf')
+    sizes = torch.cat(df['size'].tolist(),dim=0).numpy()
+    d = np.diff(np.unique(sizes)).min()
+    lofb = sizes.min() - float(d)/2
+    rolb = sizes.max() + float(d)/2
+    axs[1].hist(sizes, np.arange(lofb,rolb+d, d))
+    sns.despine(ax=axs[1],top=True,right=True)
+    axs[1].set_xlabel('size')
+    plt.tight_layout()
+    plt.savefig(f'../outputs/histograms/{gamma}_{delta}_histograms.pdf')
 
 def experiment(gamma,delta,num_lam,num_calib,epsilon,num_trials):
     fname = f'../.cache/{gamma}_{delta}_dataframe.pkl'
@@ -119,13 +124,13 @@ if __name__ == "__main__":
         fix_randomness(seed=0)
         args = parse_args(parser)
 
-        gammas = [0.05,0.1]
+        gammas = [0.1,0.05]
         deltas = [0.1,0.1]
         params = list(zip(gammas,deltas))
         num_lam = 1000 
         num_calib = 4000 
         epsilon = 0.0001
-        num_trials = 100 
+        num_trials = 1000 
         for gamma, delta in params:
             print(f"\n\n\n ============           NEW EXPERIMENT gamma={gamma} delta={delta}           ============ \n\n\n") 
             experiment(gamma,delta,num_lam,num_calib,epsilon,num_trials)
