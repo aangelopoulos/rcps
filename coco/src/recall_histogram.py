@@ -15,6 +15,7 @@ import pickle as pkl
 from tqdm import tqdm
 from utils import *
 import seaborn as sns
+from bentkus import *
 import pdb
 
 parser = argparse.ArgumentParser(description='ASL MS-COCO predictor')
@@ -27,60 +28,6 @@ parser.add_argument('--dataset_type',type=str,default='MS-COCO')
 parser.add_argument('--batch_size',type=int,default=5000)
 parser.add_argument('--th',type=float,default=0.7)
 
-def R_to_t(R,delta,num_calib):
-    return R - binom.ppf(delta/np.e,num_calib,R)/num_calib
-
-def searchR(Rhat,gamma,delta,num_calib,epsilon):
-    def _condition(R):
-        return Rhat + R_to_t(R,delta,num_calib) < gamma
-    lbR = 0
-    ubR = 1
-    R = 0.5
-    while ubR-lbR > epsilon:
-        if _condition(R):
-            ubR = R
-            R = (ubR+lbR)/2
-        else:
-            lbR = R
-            R = (ubR+lbR)/2
-    lbR = max(lbR,epsilon)
-    return lbR
-
-# Returns tlambda table 
-def get_tlambda(npts,num_calib):
-    tlambda_fname = '../.cache/tlambda_table.pkl'
-    if os.path.exists(tlambda_fname):
-        tlams = pkl.load(open(tlambda_fname,'rb'))
-        print("tlambda precomputed!")
-    else:
-        gamma_minus_rhats = np.linspace(0,0.2,npts)
-        deltas = np.array([0.1,0.05,0.01,0.001]) 
-        tlams = np.zeros((npts,4))
-        print("computing tlambda")
-        for i in tqdm(range(tlams.shape[0])):
-            for j in range(tlams.shape[1]):
-                R = searchR(0,gamma_minus_rhats[i],deltas[j],num_calib,0.0001)
-                tlams[i,j] = R_to_t(R,delta,num_calib) 
-        pkl.dump(tlams,open(tlambda_fname,'wb'))
-
-    def _tlambda(gam_minus_rhat,delt):
-        g = int(np.ceil(gam_minus_rhat/0.2 * npts)) 
-        d = None 
-        if delt == 0.1:
-            d = 0
-        elif delt == 0.05:
-            d = 1
-        elif delt == 0.01:
-            d = 2
-        elif delt == 0.001:
-            d = 3
-        else:
-            raise NotImplemented
-        #print(f"gmr:{gam_minus_rhat.item()}, g:{g},tlam:{tlams[g,d]}")
-        return tlams[g,d]
-
-    return _tlambda
-
 def get_lamhat_precomputed(scores, labels, gamma, delta, num_lam, num_calib, tlambda):
     lams = torch.linspace(0,1,num_lam)
     lam = None
@@ -91,7 +38,7 @@ def get_lamhat_precomputed(scores, labels, gamma, delta, num_lam, num_calib, tla
         Rhat = 1-avg_acc
         if Rhat >= gamma:
             break
-        if Rhat + tlambda(gamma-Rhat,delta) >= gamma:
+        if Rhat + tlambda(Rhat,delta) >= gamma:
             break
         #print(f"Rhat:{Rhat}, tlambda:{tlambda(gamma-Rhat,delta)}, gamma:{gamma}")
 
