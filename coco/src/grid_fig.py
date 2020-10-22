@@ -50,6 +50,7 @@ def gridplot_imgs(imgs,est_labels,labels,rows,cols):
         est_labelstr = ""
         all_labelstr = ""
         fake_labelstr = ""
+        num_labels = 0
         for i in range(len(est_labels[idx])):
             if est_labels[idx][i] in labels[idx]:
                 corr_labelstr += est_labels[idx][i] + '\n'
@@ -60,11 +61,13 @@ def gridplot_imgs(imgs,est_labels,labels,rows,cols):
                 est_labelstr += est_labels[idx][i] + '\n'
                 all_labelstr += '\n'
                 fake_labelstr += est_labels[idx][i] + '\n'
+            num_labels += 1
 
         for i in range(len(labels[idx])):
             if labels[idx][i] not in est_labels[idx]:
                 all_labelstr += labels[idx][i] + '\n'
                 fake_labelstr += labels[idx][i] + '\n'
+                num_labels += 1
 
         # Remove last newline
         fake_labelstr = fake_labelstr[0:-1]
@@ -72,11 +75,16 @@ def gridplot_imgs(imgs,est_labels,labels,rows,cols):
         est_labelstr = est_labelstr[0:-1]
         corr_labelstr = corr_labelstr[0:-1] 
 
+        # Resize text
+        fontsize = 32
+        if(num_labels <= 5):
+            fontsize = 48
+
         # Make a fake bbox first.
-        axs[r,c].text(0.05,0.95,fake_labelstr,transform=axs[r,c].transAxes,fontsize=28,color='#00000000',verticalalignment='top',bbox=props)
-        axs[r,c].text(0.05,0.95,all_labelstr,transform=axs[r,c].transAxes,fontsize=28,color='#ff4555',verticalalignment='top')
-        axs[r,c].text(0.05,0.95,est_labelstr,transform=axs[r,c].transAxes,fontsize=28,color='#40B5BC',verticalalignment='top')
-        axs[r,c].text(0.05,0.95,corr_labelstr,transform=axs[r,c].transAxes,fontsize=28,color='k',verticalalignment='top')
+        axs[r,c].text(0.05,0.95,fake_labelstr,transform=axs[r,c].transAxes,fontsize=fontsize,color='#00000000',verticalalignment='top',bbox=props)
+        axs[r,c].text(0.05,0.95,all_labelstr,transform=axs[r,c].transAxes,fontsize=fontsize,color='#ff4555',verticalalignment='top')
+        axs[r,c].text(0.05,0.95,est_labelstr,transform=axs[r,c].transAxes,fontsize=fontsize,color='#40B5BC',verticalalignment='top')
+        axs[r,c].text(0.05,0.95,corr_labelstr,transform=axs[r,c].transAxes,fontsize=fontsize,color='k',verticalalignment='top')
 
     plt.tight_layout()
     plt.subplots_adjust(wspace=0.05,hspace=0.05)
