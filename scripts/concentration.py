@@ -1,66 +1,86 @@
 import numpy as np
 from scipy import stats
 from matplotlib import pyplot as plt
+import bounds
 import seaborn as sns
+import pdb
 
-def invert_bentkus(delta,R,n,B):
-    binoinv = stats.binom.ppf(delta/np.e,n,R/B)
-    return (n*R-B*binoinv)/n
+#def invert_bentkus(delta,R,n,B):
+#    binoinv = stats.binom.ppf(delta/np.e,n,R/B)
+#    return (n*R-B*binoinv)/n
 
-def invert_hoeffding(delta,R,n,B):
-    return np.sqrt(-np.log(delta)/2/n)*B**2
+#def invert_hoeffding(delta,R,n,B):
+#    return np.sqrt(-np.log(delta)/2/n)*B**2
 
-def map_bounds_R(bnds,Rs,delta,n,B):
+#def map_bounds_R(bnds,Rs,delta,n,B):
+#    out = []
+#    for bnd in bnds:
+#        bnd_out = np.zeros((Rs.shape[0],)) 
+#        for i in range(Rs.shape[0]):
+#            bnd_out[i] = (Rs[i]-bnd(delta,Rs[i],n,B))/Rs[i] # The percentage of R you need to have.  
+#        out = out + [bnd_out]
+#    return out
+
+def map_bounds_R(bnds,Rs,delta,n,B,num_grid,sigmahat_factor):
+    Rs = Rs/B
     out = []
     for bnd in bnds:
         bnd_out = np.zeros((Rs.shape[0],)) 
         for i in range(Rs.shape[0]):
-            bnd_out[i] = (Rs[i]-bnd(delta,Rs[i],n,B))/Rs[i] # The percentage of R you need to have.  
+            R_plus_t = bnd(Rs[i], sigmahat_factor*np.sqrt(Rs[i]*(1-Rs[i])), n, delta, num_grid)
+            #if i == int(Rs.shape[0]/2):
+            #    pdb.set_trace()
+            bnd_out[i] = max((2*Rs[i] - R_plus_t)/Rs[i],0) # (R-t)/R : the percentage of R you need to have.  
         out = out + [bnd_out]
     return out
 
-def gridplot_bounds(bnds,Rs,deltas,ns,B,xlims,ylims,labels):
-    fig, axs = plt.subplots(nrows=ns.shape[0],ncols=deltas.shape[0],sharex='col',sharey='row')
+def gridplot_bounds(bnds,Rs,deltas,ns,B,num_grid,sigmahat_factor,xlims,ylims,labels):
+    fig, axs = plt.subplots(nrows=ns.shape[0],ncols=deltas.shape[0],sharex='col',sharey='row',figsize=(8*deltas.shape[0],3*ns.shape[0]))
     for i in range(ns.shape[0]):
         for j in range(deltas.shape[0]):
-            curves = map_bounds_R(bnds,Rs,deltas[j],ns[i],B)
+            curves = map_bounds_R(bnds,Rs,deltas[j],ns[i],B,num_grid,sigmahat_factor)
             for k in range(len(curves)):
-                axs[i,j].plot(Rs,curves[k],label=labels[k])
+                line = axs[i,j].plot(Rs,curves[k],label=labels[k], alpha=1,linewidth=3)
             axs[i,j].set_ylim(bottom=ylims[0],top=ylims[1])
             axs[i,j].set_xlim(left=xlims[0],right=xlims[1])
             axs[i,j].set_xscale('log')
-            axs[i,j].hlines(0.8,min(Rs),max(Rs),linestyles='dashed',color='#11111111')
+            axs[i,j].hlines(0.8,min(Rs),max(Rs),linestyles='dashed',color='#333333',label='80% efficient')
             axs[i,j].set_xticks([1e-3,1e-2,1e-1])
             axs[i,j].set_yticks([0, 0.5, 1])
             plt.setp(axs[i,j].get_xticklabels(),fontsize=10)
             plt.setp(axs[i,j].get_yticklabels(),fontsize=10)
             if i == 0:
-                axs[i,j].set_title(r'$\delta$='+str(deltas[j]))
+                axs[i,j].set_title(r'$\delta$='+str(deltas[j]), fontdict={'fontsize':18})
             if j == deltas.shape[0]-1:
                 axs[i,j].yaxis.set_label_position("right")
-                axs[i,j].set_ylabel('n='+str(ns[i]),labelpad=20,rotation=270)
+                axs[i,j].set_ylabel('n='+str(ns[i]),labelpad=20,rotation=270, fontsize=18)
             if i == 0 and j == deltas.shape[0]-1: 
-                lgd = axs[i,j].legend()
+                lgd = axs[i,j].legend(loc='upper left', bbox_to_anchor=(1.07,1), prop={'size':18})
 
     sns.despine(top=True,right=True)
     fig.add_subplot(111,frameon=False)
     plt.tick_params(labelcolor='none', top=False, bottom=False, left=False, right=False)
-    plt.xlabel("R")
-    plt.ylabel("Efficiency, (R-t)/R")
+    plt.xlabel("R", fontsize=18)
+    plt.ylabel("Efficiency, (R-t)/R", fontsize=18)
+    fig.tight_layout()
     
-    plt.savefig('../outputs/concentration_efficiency.pdf')
+    plt.savefig('../' + (f'outputs/{sigmahat_factor}_concentration_efficiency').replace('.','_') + '.pdf')
 
 if __name__ == "__main__":
-    sns.set(palette='pastel',font='serif')
+    sns.set(palette='Set1',font='serif')
     sns.set_style('white')
     deltas = np.array([0.1,0.01,0.001])
     ns = np.array([1000,10000,100000])
     B = 1
-    Rs = np.linspace(0.0001,0.1,2000)
+    Rs = np.logspace(-3,-0.5,50)
     ylims = [0,1]
     xlims = [min(Rs),max(Rs)]
+    sigmahat_factors = [0.1, 0.4, 1] 
+    num_grid = 100
+    dash_len = 3 
 
-    bnds = (invert_bentkus,invert_hoeffding)
-    labels = ["Bentkus","Hoeffding"]
+    bnds = (bounds.hoeffding_haive_mu_plus, bounds.bentkus_mu_plus, bounds.empirical_bennett_mu_plus, bounds.HBB_mu_plus)
+    labels = ["Hoeffding", "Bentkus", "Bennett", "HBB"]
 
-    gridplot_bounds(bnds,Rs,deltas,ns,B,xlims,ylims,labels)
+    for sigmahat_factor in sigmahat_factors:
+        gridplot_bounds(bnds,Rs,deltas,ns,B,num_grid,sigmahat_factor,xlims,ylims,labels)
