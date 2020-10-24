@@ -25,7 +25,7 @@ def bennett_plus(mu, sigma, x, n, num_grid):
     return -n * np.max(res)
 
 def bentkus_plus(mu, x, n):
-    return np.log(binom.cdf(np.ceil(n*x),n,mu)+1e-10)+1
+    return np.log(binom.cdf(np.floor(n*x),n,mu))+1
 
 ### Log upper-tail inequalities of emprical variance
 def hoeffding_var(sigma2, x, n):
@@ -34,7 +34,7 @@ def hoeffding_var(sigma2, x, n):
 
 def bentkus_var(sigma2, x, n):
     m = np.floor(n/2)
-    return np.log(binom.cdf(np.ceil(m*x),m,sigma2)+1e-10)+1
+    return np.log(binom.cdf(np.ceil(m*x),m,sigma2))+1
 
 def maurer_pontil_var(sigma2, x, n):
     return -(n-1)/2/sigma2 * np.maximum(sigma2-x,0)**2
@@ -56,7 +56,7 @@ def HBMP_sigma_plus(sigmahat, n, delta):
 def HBB_mu_plus(muhat, sigmahat, n, delta, num_grid):
     sigmahat_plus = HBMP_sigma_plus(sigmahat, n, delta/2)
     def _tailprob(mu):
-        hoeffding_mu = hoeffding_plus(mu, muhat, n)
+        hoeffding_mu = hoeffding_plus(mu, muhat, n) 
         bentkus_mu = bentkus_plus(mu, muhat, n)
         bennett_mu = bennett_plus(mu, sigmahat_plus, muhat, n, num_grid)
         return min(hoeffding_mu, bentkus_mu, bennett_mu) - np.log(delta / 2)
@@ -78,7 +78,7 @@ def empirical_bennett_mu_plus(muhat, sigmahat, n, delta, num_grid):
 ### UCB of mean via Bentkus
 def bentkus_mu_plus(muhat, sigmahat, n, delta, num_grid):
     def _tailprob(mu):
-        return bentkus_plus(mu, muhat, n) - np.log(delta / 2)
+        return bentkus_plus(mu, muhat, n) - np.log(delta)
     if _tailprob(1-1e-10) > 0:
         return 1
     else:
@@ -87,7 +87,7 @@ def bentkus_mu_plus(muhat, sigmahat, n, delta, num_grid):
 ### UCB of mean via Bentkus
 def hoeffding_haive_mu_plus(muhat, sigmahat, n, delta, num_grid):
     def _tailprob(mu):
-        return hoeffding_naive(mu, muhat, n) - np.log(delta / 2)
+        return hoeffding_naive(mu, muhat, n) - np.log(delta)
     if _tailprob(1-1e-10) > 0:
         return 1
     else:
