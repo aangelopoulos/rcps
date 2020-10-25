@@ -71,7 +71,7 @@ def plot_histograms(df,gamma,delta):
     plt.tight_layout()
     plt.savefig(f'../outputs/histograms/{gamma}_{delta}_histograms.pdf')
 
-def experiment(gamma,delta,num_lam,num_calib,epsilon,num_trials):
+def experiment(gamma,delta,num_lam,num_calib,epsilon,num_trials,maxiters):
     fname = f'../.cache/{gamma}_{delta}_dataframe.pkl'
     df = pd.DataFrame(columns = ["$\\hat{\\lambda}$","precision","recall","size","gamma","delta"])
     try:
@@ -129,8 +129,9 @@ if __name__ == "__main__":
         params = list(zip(gammas,deltas))
         num_lam = 1000 
         num_calib = 4000 
-        epsilon = 0.0001
+        epsilon = 1e-10
+        maxiters = 1e5
         num_trials = 1000 
         for gamma, delta in params:
             print(f"\n\n\n ============           NEW EXPERIMENT gamma={gamma} delta={delta}           ============ \n\n\n") 
-            experiment(gamma,delta,num_lam,num_calib,epsilon,num_trials)
+            experiment(gamma,delta,num_lam,num_calib,epsilon,num_trials,maxiters)

@@ -10,7 +10,7 @@ import argparse
 import time
 import numpy as np
 from scipy.stats import binom
-from scipy.optimize import brenth
+from scipy.optimize import brentq
 from PIL import Image
 import matplotlib
 import matplotlib.pyplot as plt
@@ -33,17 +33,14 @@ parser.add_argument('--dataset_type',type=str,default='MS-COCO')
 parser.add_argument('--batch_size',type=int,default=5000)
 parser.add_argument('--th',type=float,default=0.7)
 
-#def R_to_t(R,delta,num_calib):
-#    return R - binom.ppf(delta/np.e,num_calib,R)/num_calib
+def R_to_t(R,sigma,delta,num_calib,num_grid_hbb,maxiters):
+    return bentkus_mu_plus(R,sigma,num_calib,delta,num_grid_hbb,maxiters) - R
 
-def R_to_t(R,sigma,delta,num_calib,num_grid_hbb):
-    return bentkus_mu_plus(R,sigma,num_calib,delta,num_grid_hbb) - R
-
-def searchR(Rhat,sigmahat,delta,num_calib,num_grid_hbb,epsilon):
+def searchR(Rhat,sigmahat,delta,num_calib,num_grid_hbb,epsilon,maxiters):
     def _gap(R):
-        return R - R_to_t(R,sigmahat,delta,num_calib,num_grid_hbb) - Rhat
+        return R - R_to_t(R,sigmahat,delta,num_calib,num_grid_hbb,maxiters) - Rhat
 
-    root = brenth(_gap,0,1) 
+    root = brentq(_gap,0,1,maxiter=maxiters) 
     return max(root,epsilon)
 
 #out = Parallel(n_jobs=-1, verbose=100)( _inner_loops_tlambda(tlams.shape[1], tlams.shape[2], rhats[i], sigmas, deltas, num_calib, num_grid_hbb) for i in range(tlams.shape[0]))
@@ -56,23 +53,23 @@ def searchR(Rhat,sigmahat,delta,num_calib,num_grid_hbb,epsilon):
 #    return tlams_i
 
 # Returns tlambda table 
-def get_tlambda(npts,num_calib,num_grid_hbb,ub=0.2,epsilon):
+def get_tlambda(npts,num_calib,num_grid_hbb,ub,epsilon,maxiters):
     tlambda_fname = '../.cache/tlambda_table.pkl'
     if os.path.exists(tlambda_fname):
         tlams = pkl.load(open(tlambda_fname,'rb'))
         print("tlambda precomputed!")
     else:
-        # Log space this from 10-4 to 10-1.
-        rhats = np.linspace(1e-10,ub,npts)
-        sigmas = np.linspace(1e-10,ub,npts)
+        # TODO: Log space this from 10-4 to 10-1.
+        rhats = np.linspace(epsilon,ub,npts)
+        sigmas = np.linspace(epsilon,ub,npts)
         deltas = np.array([0.1,0.05,0.01,0.001]) 
         tlams = np.zeros((npts,npts,4))
         print("computing tlambda")
         for i in tqdm(range(tlams.shape[0])):
             for j in range(tlams.shape[2]):
                 #for k in range(tlams.shape[2]):
-                R = searchR(rhats[i],sigmas[0],deltas[j],num_calib,num_grid_hbb,epsilon)
-                tlams[i,:,j] = R_to_t(R,sigmas[0],deltas[j],num_calib,num_grid_hbb) 
+                R = searchR(rhats[i],sigmas[0],deltas[j],num_calib,num_grid_hbb,epsilon,maxiters)
+                tlams[i,:,j] = R_to_t(R,sigmas[0],deltas[j],num_calib,num_grid_hbb,maxiters) 
         pkl.dump(tlams,open(tlambda_fname,'wb'))
 
     def _tlambda(rhat,sig,delt):
@@ -99,11 +96,13 @@ if __name__ == "__main__":
         deltas = [0.001, 0.01, 0.05, 0.1]
         params = list(itertools.product(deltas,ps))
         num_lam = 1000 
-        num_calib = 4000 
+        num_calib = 100000 
         num_grid_hbb = 5000
-        epsilon = 0.000001
+        epsilon = 1e-10 
+        maxiters = int(1e5)
         num_trials = 1000000 
-        tlambda = get_tlambda(num_lam,num_calib,num_grid_hbb,epsilon)
+        ub = 0.2
+        tlambda = get_tlambda(num_lam,num_calib,num_grid_hbb,ub,epsilon,maxiters)
         for delta, p in params:
             print(f"\n\n\n ============           NEW EXPERIMENT delta={delta}, p={p}          ============ \n\n\n") 
             Rhat = np.random.binomial(num_calib,p,size=(num_trials,))/num_calib
@@ -111,5 +110,8 @@ if __name__ == "__main__":
             upper_bound = np.zeros_like(Rhat)
             for i in tqdm(range(num_trials)):
                 upper_bound[i] = Rhat[i] + tlambda(Rhat[i],sigmahat[i],delta)
-            print(f"Risk: {1-(upper_bound>p).mean()}, Theory: {delta/np.e}, Difference: {(1-(upper_bound>p).mean()-delta/np.e)/np.sqrt((delta/np.e)*(1-(delta/np.e))/num_trials)}")
+            e_risk = 1-(upper_bound>p).mean()
+            t_risk = delta/np.e
+            z_value = (1-(upper_bound>p).mean()-delta/np.e)/np.sqrt((delta/np.e)*(1-(delta/np.e))/num_trials)
+            print(f"Risk: {e_risk}, Theory: {t_risk}, Difference: {e_risk/t_risk}")
 
