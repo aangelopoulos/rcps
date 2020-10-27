@@ -69,28 +69,31 @@ def plot_histograms(df_list,gamma,delta,bounds_to_plot):
     
     for i in range(len(df_list)):
         df = df_list[i]
-        axs[0].hist(np.array(df['recall'].tolist()), recall_bins, alpha=0.5)
+        axs[0].hist(np.array(df['recall'].tolist()), recall_bins, alpha=0.7, density=True)
 
         # Sizes will be 10 times as big as recall, since we pool it over runs.
         sizes = torch.cat(df['size'].tolist(),dim=0).numpy()
         d = np.diff(np.unique(sizes)).min()
         lofb = sizes.min() - float(d)/2
         rolb = sizes.max() + float(d)/2
-        axs[1].hist(sizes, np.arange(lofb,rolb+d, d), label=bounds_to_plot[i], alpha=0.5)
-        axs[1].set_xlabel('size')
+        axs[1].hist(sizes, np.arange(lofb,rolb+d, d), label=bounds_to_plot[i], alpha=0.7, density=True)
     
+    axs[0].set_xlabel('recall')
+    axs[0].set_ylabel('density')
+    axs[0].set_yticks([0,100])
+    axs[1].set_xlabel('size')
     sns.despine(ax=axs[0],top=True,right=True)
     sns.despine(ax=axs[1],top=True,right=True)
-    axs[1].legend()
+    #axs[1].legend()
     plt.tight_layout()
     plt.savefig('../' + (f'outputs/histograms/{gamma}_{delta}_histograms').replace('.','_') + '.pdf')
 
 def experiment(gamma,delta,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,num_trials,maxiters,bounds_to_plot):
     df_list = []
     for bound_str in bounds_to_plot:
-        if bound_str == 'bentkus':
+        if bound_str == 'Bentkus':
             bound_fn = bentkus_mu_plus
-        elif bound_str == 'hbb':
+        elif bound_str == 'HBB':
             bound_fn = HBB_mu_plus
         else:
             raise NotImplemented
@@ -143,12 +146,12 @@ def experiment(gamma,delta,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,nu
 
 if __name__ == "__main__":
     with torch.no_grad():
-        sns.set(palette='Set1',font='serif')
+        sns.set(palette='pastel',font='serif')
         sns.set_style('white')
         fix_randomness(seed=0)
         args = parse_args(parser)
 
-        bounds_to_plot = ['hbb', 'bentkus']
+        bounds_to_plot = ['HBB']
 
         gammas = [0.1,0.05]
         deltas = [0.1,0.1]
