@@ -25,7 +25,7 @@ def bennett_plus(mu, sigma, x, n, num_grid):
     return -n * np.max(res)
 
 def bentkus_plus(mu, x, n):
-    return np.log(binom.cdf(np.floor(n*x),n,mu))+1
+    return np.log(max(binom.cdf(np.floor(n*x),n,mu),1e-10))+1
 
 ### Log upper-tail inequalities of emprical variance
 def hoeffding_var(sigma2, x, n):
@@ -34,7 +34,7 @@ def hoeffding_var(sigma2, x, n):
 
 def bentkus_var(sigma2, x, n):
     m = np.floor(n/2)
-    return np.log(binom.cdf(np.ceil(m*x),m,sigma2))+1
+    return np.log(max(binom.cdf(np.ceil(m*x),m,sigma2),1e-10))+1
 
 def maurer_pontil_var(sigma2, x, n):
     return -(n-1)/2/sigma2 * np.maximum(sigma2-x,0)**2
@@ -54,7 +54,7 @@ def HBMP_sigma_plus(sigmahat, n, delta, maxiters):
 
 ### Upper confidence bound of mean via Hoeffding-Bentkus-Empirical Bennett inequalities
 def HBB_mu_plus(muhat, sigmahat, n, delta, num_grid, maxiters):
-    sigmahat_plus = HBMP_sigma_plus(sigmahat, n, delta/2)
+    sigmahat_plus = HBMP_sigma_plus(sigmahat, n, delta/2, maxiters)
     def _tailprob(mu):
         hoeffding_mu = hoeffding_plus(mu, muhat, n) 
         bentkus_mu = bentkus_plus(mu, muhat, n)
@@ -67,7 +67,7 @@ def HBB_mu_plus(muhat, sigmahat, n, delta, num_grid, maxiters):
 
 ### UCB of mean via Empirical Bennett
 def empirical_bennett_mu_plus(muhat, sigmahat, n, delta, num_grid, maxiters):
-    sigmahat_plus = HBMP_sigma_plus(sigmahat, n, delta/2)
+    sigmahat_plus = HBMP_sigma_plus(sigmahat, n, delta/2, maxiters)
     def _tailprob(mu):
         return bennett_plus(mu, sigmahat_plus, muhat, n, num_grid) - np.log(delta / 2)
     if _tailprob(1-1e-10) > 0:
@@ -85,7 +85,16 @@ def bentkus_mu_plus(muhat, sigmahat, n, delta, num_grid, maxiters):
         return brentq(_tailprob, muhat, 1-1e-10, maxiter=maxiters)
 
 ### UCB of mean via Bentkus
-def hoeffding_haive_mu_plus(muhat, sigmahat, n, delta, num_grid, maxiters):
+def hoeffding_mu_plus(muhat, sigmahat, n, delta, num_grid, maxiters):
+    def _tailprob(mu):
+        return hoeffding_plus(mu, muhat, n) - np.log(delta)
+    if _tailprob(1-1e-10) > 0:
+        return 1
+    else:
+        return brentq(_tailprob, muhat, 1-1e-10, maxiter=maxiters)
+
+### UCB of mean via Bentkus
+def hoeffding_naive_mu_plus(muhat, sigmahat, n, delta, num_grid, maxiters):
     def _tailprob(mu):
         return hoeffding_naive(mu, muhat, n) - np.log(delta)
     if _tailprob(1-1e-10) > 0:

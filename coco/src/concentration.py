@@ -1,6 +1,6 @@
 import os, sys, inspect
 sys.path.insert(1, os.path.join(sys.path[0], '../..'))
-from core.bounds import bentkus_mu_plus
+from core.bounds import bentkus_mu_plus, HBB_mu_plus
 import torch
 import torchvision as tv
 from asl.helper_functions.helper_functions import parse_args
@@ -33,85 +33,109 @@ parser.add_argument('--dataset_type',type=str,default='MS-COCO')
 parser.add_argument('--batch_size',type=int,default=5000)
 parser.add_argument('--th',type=float,default=0.7)
 
-def R_to_t(R,sigma,delta,num_calib,num_grid_hbb,maxiters):
-    return bentkus_mu_plus(R,sigma,num_calib,delta,num_grid_hbb,maxiters) - R
+def R_to_t(R,sigma,delta,num_calib,num_grid_hbb,maxiters,bound_fn):
+    return bound_fn(R,sigma,num_calib,delta,num_grid_hbb,maxiters) - R
 
-def searchR(Rhat,sigmahat,delta,num_calib,num_grid_hbb,epsilon,maxiters):
+def searchR(Rhat,sigmahat,delta,num_calib,num_grid_hbb,epsilon,maxiters,bound_fn):
     def _gap(R):
-        return R - R_to_t(R,sigmahat,delta,num_calib,num_grid_hbb,maxiters) - Rhat
+        return R - R_to_t(R,sigmahat,delta,num_calib,num_grid_hbb,maxiters,bound_fn) - Rhat
 
     root = brentq(_gap,0,1,maxiter=maxiters) 
     return max(root,epsilon)
 
-#out = Parallel(n_jobs=-1, verbose=100)( _inner_loops_tlambda(tlams.shape[1], tlams.shape[2], rhats[i], sigmas, deltas, num_calib, num_grid_hbb) for i in range(tlams.shape[0]))
-#def _inner_loops_tlambda(n_j, n_k, rhats_i, sigmas, deltas, num_calib, num_grid_hbb):
-#    tlams_i = np.zeros((1,n_j,n_k)) 
-#    for j in range(n_j):
-#        for k in range(n_k):
-#            R = searchR(rhats_i,sigmas[j],deltas[k],num_calib,num_grid_hbb,0.0001)
-#            tlams_i[0,j,k] = R_to_t(R,sigmas[j],deltas[k],num_calib,num_grid_hbb) 
-#    return tlams_i
-
-# Returns tlambda table 
-def get_tlambda(npts,num_calib,num_grid_hbb,ub,epsilon,maxiters):
-    tlambda_fname = '../.cache/tlambda_table.pkl'
+def get_tlambda(npts,deltas,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,maxiters,bound_str,bound_fn):
+    tlambda_fname = '../.cache/' + bound_str + '_' + str(npts) + '_tlambda_table.pkl'
+    npts_sigma = max(int(npts/10),1)
     if os.path.exists(tlambda_fname):
         tlams = pkl.load(open(tlambda_fname,'rb'))
         print("tlambda precomputed!")
     else:
-        # TODO: Log space this from 10-4 to 10-1.
         rhats = np.linspace(epsilon,ub,npts)
-        sigmas = np.linspace(epsilon,ub,npts)
-        deltas = np.array([0.1,0.05,0.01,0.001]) 
-        tlams = np.zeros((npts,npts,4))
+        sigmas = np.linspace(epsilon,ub_sigma,npts_sigma)
+        #rhats = np.logspace(np.log10(epsilon),np.log10(ub),npts)
+        #sigmas = np.logspace(np.log10(epsilon),np.log10(ub_sigma),npts_sigma)
+        tlams = np.zeros((npts,sigmas.shape[0],4))
         print("computing tlambda")
-        for i in tqdm(range(tlams.shape[0])):
-            for j in range(tlams.shape[2]):
-                #for k in range(tlams.shape[2]):
-                R = searchR(rhats[i],sigmas[0],deltas[j],num_calib,num_grid_hbb,epsilon,maxiters)
-                tlams[i,:,j] = R_to_t(R,sigmas[0],deltas[j],num_calib,num_grid_hbb,maxiters) 
+
+        if bound_str in ['empirical_bennett', 'hbb']:
+            for i in tqdm(range(tlams.shape[0])):
+                for j in range(tlams.shape[1]):
+                    for k in range(tlams.shape[2]):
+                        R = searchR(rhats[i],sigmas[j],deltas[k],num_calib,num_grid_hbb,epsilon,maxiters,bound_fn)
+                        tlams[i,j,k] = R_to_t(R,sigmas[j],deltas[k],num_calib,num_grid_hbb,maxiters,bound_fn) 
+        else:
+            for i in tqdm(range(tlams.shape[0])):
+                for k in range(tlams.shape[2]):
+                    R = searchR(rhats[i],1,deltas[k],num_calib,num_grid_hbb,epsilon,maxiters,bound_fn)
+                    tlams[i,:,k] = R_to_t(R,1,deltas[k],num_calib,num_grid_hbb,maxiters,bound_fn) 
+
         pkl.dump(tlams,open(tlambda_fname,'wb'))
 
     def _tlambda(rhat,sig,delt):
         r = min(int(np.floor(rhat/ub * npts)), npts-1)
-        s = min(int(np.ceil(sig/ub * npts)), npts-1)
+        s = min(int(np.ceil(sig/ub_sigma * npts_sigma)), -1)
+        #r = min(int(np.floor((np.log10(rhat)-np.log10(epsilon))/(np.log10(ub)-np.log10(epsilon)) * npts)), npts-1)
+        #s = min(int(np.ceil((np.log10(sig)-np.log10(epsilon))/(np.log10(ub_sigma)-np.log10(epsilon)) * npts)), npts_sigma-1)
         d = None 
-        if delt == 0.1:
-            d = 0
-        elif delt == 0.05:
-            d = 1
-        elif delt == 0.01:
-            d = 2
-        elif delt == 0.001:
-            d = 3
-        else:
+        for i in range(len(deltas)):
+            if delt == deltas[i]:
+                d = i
+                break
+        if d is None or d == None:
             raise NotImplemented
+
         return tlams[r,s,d]
 
     return _tlambda
 
+def test_table(Rhat,delta,bound_fn):
+    sigmahat = np.sqrt(2*Rhat*(1-Rhat))
+    ucb1 = Rhat + tlambda(Rhat, sigmahat, delta)
+    ucb2 = R_to_t(Rhat, sigmahat, delta, num_calib, num_grid_hbb, maxiters, bound_fn) + Rhat
+    x1 = np.random.binomial(num_calib, ucb1, size=(num_trials,))/num_calib
+    x2 = np.random.binomial(num_calib, ucb2, size=(num_trials,))/num_calib
+    r1 = (x1 <= Rhat).mean() * np.e / delta
+    r2 = (x2 <= Rhat).mean() * np.e / delta
+    print(f"UCB fraction: {(ucb1-ucb2)/ucb2} | Table: {r1} | Direct: {r2}")
+
 if __name__ == "__main__":
     with torch.no_grad():
+        bounds_to_plot = ['bentkus','hbb']
         ps = [0.05, 0.1, 0.2]
         deltas = [0.001, 0.01, 0.05, 0.1]
         params = list(itertools.product(deltas,ps))
-        num_lam = 1000 
-        num_calib = 100000 
-        num_grid_hbb = 5000
+
+        num_lam = 1500 
+        num_calib = 4000 
+        num_grid_hbb = 200
         epsilon = 1e-10 
         maxiters = int(1e5)
-        num_trials = 1000000 
+        num_trials = 100000 
         ub = 0.2
-        tlambda = get_tlambda(num_lam,num_calib,num_grid_hbb,ub,epsilon,maxiters)
-        for delta, p in params:
-            print(f"\n\n\n ============           NEW EXPERIMENT delta={delta}, p={p}          ============ \n\n\n") 
-            Rhat = np.random.binomial(num_calib,p,size=(num_trials,))/num_calib
-            sigmahat = np.sqrt(Rhat*(1-Rhat)/num_calib)
-            upper_bound = np.zeros_like(Rhat)
-            for i in tqdm(range(num_trials)):
-                upper_bound[i] = Rhat[i] + tlambda(Rhat[i],sigmahat[i],delta)
-            e_risk = 1-(upper_bound>p).mean()
-            t_risk = delta/np.e
-            z_value = (1-(upper_bound>p).mean()-delta/np.e)/np.sqrt((delta/np.e)*(1-(delta/np.e))/num_trials)
-            print(f"Risk: {e_risk}, Theory: {t_risk}, Difference: {e_risk/t_risk}")
+        ub_sigma = np.sqrt(2)
+
+        for bound_str in bounds_to_plot:
+            if bound_str == 'bentkus':
+                bound_fn = bentkus_mu_plus
+            elif bound_str == 'hbb':
+                bound_fn = HBB_mu_plus
+
+            tlambda = get_tlambda(num_lam,deltas,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,maxiters,bound_str,bound_fn)
+
+            # The test
+            test_table(0.19,0.001,bound_fn)
+            test_table(0.01,0.001,bound_fn)
+
+            # Experiments
+            for delta, p in params:
+                print(f"\n\n\n ============      bound={bound_str} NEW EXPERIMENT delta={delta}, p={p}          ============ \n\n\n") 
+                Rhat = np.random.binomial(num_calib,p,size=(num_trials,))/num_calib
+                sigmahat = np.sqrt(2*Rhat*(1-Rhat))#np.sqrt(Rhat*(1-Rhat)/num_calib)
+                upper_bound = np.zeros_like(Rhat)
+                for i in tqdm(range(num_trials)):
+                    upper_bound[i] = Rhat[i] + tlambda(Rhat[i],sigmahat[i],delta)
+                e_miscoverage = (upper_bound <= p).mean()#1-(upper_bound>p).mean()
+                t_miscoverage = delta/np.e # delta/np.e for bentkus, delta/2 else.
+                z_value = (1-(upper_bound>p).mean()-delta/np.e)/np.sqrt((delta/np.e)*(1-(delta/np.e))/num_trials)
+                print(f"Miscoverage: {e_miscoverage}, Theory: {t_miscoverage}, Miscoverage/Theory: {e_miscoverage/t_miscoverage}")
 
