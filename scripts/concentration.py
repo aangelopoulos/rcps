@@ -23,24 +23,24 @@ import pdb
 #        out = out + [bnd_out]
 #    return out
 
-def map_bounds_R(bnds,Rs,delta,n,B,num_grid,sigmahat_factor):
+def map_bounds_R(bnds,Rs,delta,n,B,num_grid,sigmahat_factor,maxiters):
     Rs = Rs/B
     out = []
     for bnd in bnds:
         bnd_out = np.zeros((Rs.shape[0],)) 
         for i in range(Rs.shape[0]):
-            R_plus_t = bnd(Rs[i], sigmahat_factor*np.sqrt(Rs[i]*(1-Rs[i])), n, delta, num_grid)
+            R_plus_t = bnd(Rs[i], sigmahat_factor*np.sqrt(Rs[i]*(1-Rs[i])), n, delta, num_grid, maxiters)
             #if i == int(Rs.shape[0]/2):
             #    pdb.set_trace()
             bnd_out[i] = max((2*Rs[i] - R_plus_t)/Rs[i],0) # (R-t)/R : the percentage of R you need to have.  
         out = out + [bnd_out]
     return out
 
-def gridplot_bounds(bnds,Rs,deltas,ns,B,num_grid,sigmahat_factor,xlims,ylims,labels):
+def gridplot_bounds(bnds,Rs,deltas,ns,B,num_grid,sigmahat_factor,xlims,ylims,labels,maxiters):
     fig, axs = plt.subplots(nrows=ns.shape[0],ncols=deltas.shape[0],sharex='col',sharey='row',figsize=(2*(6.5),2*ns.shape[0]))
     for i in range(ns.shape[0]):
         for j in range(deltas.shape[0]):
-            curves = map_bounds_R(bnds,Rs,deltas[j],ns[i],B,num_grid,sigmahat_factor)
+            curves = map_bounds_R(bnds,Rs,deltas[j],ns[i],B,num_grid,sigmahat_factor,maxiters)
             for k in range(len(curves)):
                 line = axs[i,j].plot(Rs,curves[k],label=labels[k], alpha=1,linewidth=3)
             axs[i,j].set_ylim(bottom=ylims[0],top=ylims[1])
@@ -80,9 +80,10 @@ if __name__ == "__main__":
     sigmahat_factors = [0.1, 0.4, 1] 
     num_grid = 100
     dash_len = 3 
+    maxiters = int(1e5) 
 
-    bnds = (bounds.hoeffding_haive_mu_plus, bounds.bentkus_mu_plus, bounds.empirical_bennett_mu_plus, bounds.HBB_mu_plus)
+    bnds = (bounds.hoeffding_naive_mu_plus, bounds.bentkus_mu_plus, bounds.empirical_bennett_mu_plus, bounds.HBB_mu_plus)
     labels = ["Hoeffding", "Bentkus", "Bennett", "HBB"]
 
     for sigmahat_factor in sigmahat_factors:
-        gridplot_bounds(bnds,Rs,deltas,ns,B,num_grid,sigmahat_factor,xlims,ylims,labels)
+        gridplot_bounds(bnds,Rs,deltas,ns,B,num_grid,sigmahat_factor,xlims,ylims,labels,maxiters)

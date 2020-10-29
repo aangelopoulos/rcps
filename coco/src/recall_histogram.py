@@ -60,7 +60,7 @@ def trial_precomputed(scores,labels,gamma,delta,num_lam,num_calib,batch_size,tla
     return prec.mean().item(), rec.mean().item(), size, lhat.item()
 
 def plot_histograms(df_list,gamma,delta,bounds_to_plot):
-    rig, axs = plt.subplots(nrows=1,ncols=2,figsize=(6,1.5))
+    rig, axs = plt.subplots(nrows=1,ncols=2,figsize=(12,3))
 
     minrecall = min([df['recall'].min() for df in df_list])
     maxrecall = min([df['recall'].max() for df in df_list])
@@ -78,7 +78,8 @@ def plot_histograms(df_list,gamma,delta,bounds_to_plot):
         rolb = sizes.max() + float(d)/2
         axs[1].hist(sizes, np.arange(lofb,rolb+d, d), label=bounds_to_plot[i], alpha=0.7, density=True)
     
-    axs[0].set_xlabel('recall')
+    axs[0].set_xlabel('risk')
+    axs[0].locator_params(axis='x', nbins=4)
     axs[0].set_ylabel('density')
     axs[0].set_yticks([0,100])
     axs[1].set_xlabel('size')
