@@ -17,7 +17,7 @@ import pickle as pkl
 from tqdm import tqdm
 from utils import *
 import seaborn as sns
-from concentration import *
+from core.concentration import *
 import pdb
 
 parser = argparse.ArgumentParser(description='ASL MS-COCO predictor')
@@ -162,9 +162,11 @@ if __name__ == "__main__":
         num_grid_hbb = 200
         epsilon = 1e-10 
         maxiters = int(1e5)
-        num_trials = 1000
+        num_trials = 10 # should be 1000
         ub = 0.2
         ub_sigma = np.sqrt(2)
+        
+        deltas_precomputed = [0.001, 0.01, 0.05, 0.1]
         
         for gamma, delta in params:
             print(f"\n\n\n ============           NEW EXPERIMENT gamma={gamma} delta={delta}           ============ \n\n\n") 

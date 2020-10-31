@@ -1,5 +1,6 @@
 import os, sys, inspect
 sys.path.insert(1, os.path.join(sys.path[0], '../..'))
+dir_path = os.path.dirname(os.path.realpath(__file__))
 from core.bounds import bentkus_mu_plus, HBB_mu_plus
 import torch
 import torchvision as tv
@@ -23,16 +24,6 @@ import seaborn as sns
 from joblib import Parallel
 import pdb
 
-parser = argparse.ArgumentParser(description='ASL MS-COCO predictor')
-
-parser.add_argument('--model_path',type=str,default='../models/MS_COCO_TResNet_xl_640_88.4.pth')
-parser.add_argument('--dset_path',type=str,default='../data/')
-parser.add_argument('--model_name',type=str,default='tresnet_xl')
-parser.add_argument('--input_size',type=int,default=640)
-parser.add_argument('--dataset_type',type=str,default='MS-COCO')
-parser.add_argument('--batch_size',type=int,default=5000)
-parser.add_argument('--th',type=float,default=0.7)
-
 def R_to_t(R,sigma,delta,num_calib,num_grid_hbb,maxiters,bound_fn):
     return bound_fn(R,sigma,num_calib,delta,num_grid_hbb,maxiters) - R
 
@@ -44,8 +35,9 @@ def searchR(Rhat,sigmahat,delta,num_calib,num_grid_hbb,epsilon,maxiters,bound_fn
     return max(root,epsilon)
 
 def get_tlambda(npts,deltas,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,maxiters,bound_str,bound_fn):
-    tlambda_fname = '../.cache/' + bound_str + '_' + str(npts) + '_tlambda_table.pkl'
+    tlambda_fname = dir_path + '/.cache/' + bound_str.lower() + '_' + str(npts) + '_' + str(num_calib) + '_tlambda_table.pkl'
     npts_sigma = max(int(npts/10),1)
+
     if os.path.exists(tlambda_fname):
         tlams = pkl.load(open(tlambda_fname,'rb'))
         print("tlambda precomputed!")
@@ -54,10 +46,10 @@ def get_tlambda(npts,deltas,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,maxiters,
         sigmas = np.linspace(epsilon,ub_sigma,npts_sigma)
         #rhats = np.logspace(np.log10(epsilon),np.log10(ub),npts)
         #sigmas = np.logspace(np.log10(epsilon),np.log10(ub_sigma),npts_sigma)
-        tlams = np.zeros((npts,sigmas.shape[0],4))
+        tlams = np.zeros((npts,sigmas.shape[0],len(deltas)))
         print("computing tlambda")
 
-        if bound_str in ['empirical_bennett', 'hbb']:
+        if bound_str in ['empirical_bennett', 'hbb', 'HBB']:
             for i in tqdm(range(tlams.shape[0])):
                 for j in range(tlams.shape[1]):
                     for k in range(tlams.shape[2]):
