@@ -137,6 +137,45 @@ def platt_logits(cmodel, calib_loader, max_iters=10, lr=0.01, epsilon=0.01):
             break
     return T 
 
+### Precomputed, calibrated score version of the above
+
+class ConformalModelScores(nn.Module):
+    def __init__(self, model, calib_loader, alpha=0.1, kreg=5, lamda=0.01, randomized=True, naive=False):
+        super(ConformalModelScores, self).__init__()
+        self.model = model 
+        self.alpha = alpha
+        self.penalties = np.zeros((1, calib_loader.dataset[0][0].shape[0]))
+        self.penalties[:, kreg:] += lamda
+        self.randomized=randomized
+        self.Qhat = 1-alpha if naive else conformal_calibration_scores(self, calib_loader)
+
+    def forward(self, scores, randomized=None):
+        if randomized == None:
+            randomized = self.randomized
+        
+        with torch.no_grad():
+            scores = scores.detach().cpu().numpy()
+        
+            I, ordered, cumsum = sort_sum(scores)
+
+            S = gcq(scores, self.Qhat, I=I, ordered=ordered, cumsum=cumsum, penalties=self.penalties, randomized=randomized)
+
+        return scores, S
+
+def conformal_calibration_scores(cmodel, calib_loader):
+    with torch.no_grad():
+        E = np.array([])
+        for scores, targets in calib_loader:
+            scores = scores.detach().cpu().numpy()
+
+            I, ordered, cumsum = sort_sum(scores)
+
+            E = np.concatenate((E,giq(scores,targets,I=I,ordered=ordered,cumsum=cumsum,penalties=cmodel.penalties,randomized=cmodel.randomized)))
+            
+        Qhat = np.quantile(E,1-cmodel.alpha,interpolation='higher')
+
+        return Qhat 
+
 ### CORE CONFORMAL INFERENCE FUNCTIONS
 
 # Generalized conditional quantile function.

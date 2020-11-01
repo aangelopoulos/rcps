@@ -9,7 +9,10 @@ import pathlib
 import os
 import pickle
 from tqdm import tqdm
+import random
+import pandas as pd
 import pdb
+dirname = str(pathlib.Path(__file__).parent.absolute())
 
 def sort_sum(scores):
     I = scores.argsort(axis=1)[:,::-1]
@@ -41,14 +44,12 @@ class AverageMeter(object):
         fmtstr = '{name} {val' + self.fmt + '} ({avg' + self.fmt + '})'
         return fmtstr.format(**self.__dict__)
 
-def validate(val_loader, model, criterion, print_bool):
+def validate(val_loader, model, losses, print_bool):
     with torch.no_grad():
         batch_time = AverageMeter('batch_time')
-        losses = AverageMeter('losses')
-        top1 = AverageMeter('top1')
-        top5 = AverageMeter('top5')
-        coverage = AverageMeter('RAPS coverage')
-        size = AverageMeter('RAPS size')
+        risks = AverageMeter('empirical losses')
+        sizes = AverageMeter('RAPS size')
+        sizes_arr = []
         # switch to evaluate mode
         model.eval()
         end = time.time()
@@ -57,37 +58,34 @@ def validate(val_loader, model, criterion, print_bool):
             target = target.cuda()
             # compute output
             output, S = model(x.cuda())
-            loss = criterion(output, target)
             # measure accuracy and record loss
-            prec1, prec5 = accuracy(output, target, topk=(1, 5))
-            cvg, sz = coverage_size(S, target)
+            risk, size_arr = risk_size(S, target, losses)
+
 
             # Update meters
-            losses.update(loss.item(), n=x.shape[0])
-            top1.update(prec1.item()/100.0, n=x.shape[0])
-            top5.update(prec5.item()/100.0, n=x.shape[0])
-            coverage.update(cvg, n=x.shape[0])
-            size.update(sz, n=x.shape[0])
+            risks.update(risk, n=x.shape[0])
+            sizes.update(size_arr.mean(), n=x.shape[0])
+            sizes_arr = sizes_arr + [size_arr]
 
             # measure elapsed time
             batch_time.update(time.time() - end)
             end = time.time()
             N = N + x.shape[0]
             if print_bool:
-                print(f'\rN: {N} | Time: {batch_time.val:.3f} ({batch_time.avg:.3f}) | Loss: {losses.val:.4f} ({losses.avg:.4f}) | Cvg@1: {top1.val:.3f} ({top1.avg:.3f}) | Cvg@5: {top5.val:.3f} ({top5.avg:.3f}) | Cvg@RAPS: {coverage.val:.3f} ({coverage.avg:.3f}) | Size@RAPS: {size.val:.3f} ({size.avg:.3f})', end='')
+                print(f'\rN: {N} | Time: {batch_time.val:.3f} ({batch_time.avg:.3f}) | Risks: {risks.val:.3f} ({risks.avg:.3f}) | Sizes: {sizes.val:.3f} ({sizes.avg:.3f}) ', end='')
     if print_bool:
         print('') #Endline
 
-    return top1.avg, top5.avg, coverage.avg, size.avg 
+    return risks.avg, sizes_arr 
 
-def coverage_size(S,targets):
-    covered = 0
-    size = 0
+def risk_size(S,targets, losses):
+    risk = 0
+    size_arr = np.zeros((targets.shape[0],))
     for i in range(targets.shape[0]):
-        if (targets[i].item() in S[i]):
-            covered += 1
-        size = size + S[i].shape[0]
-    return float(covered)/targets.shape[0], size/targets.shape[0]
+        if (targets[i].item() not in S[i]):
+            risk += losses[targets[i].item()] 
+        size_arr[i] = S[i].shape[0]
+    return float(risk)/targets.shape[0], size_arr 
 
 def accuracy(output, target, topk=(1,)):
     """Computes the precision@k for the specified values of k"""
@@ -173,7 +171,7 @@ def get_logits_targets(model, loader):
     dataset_logits = torch.utils.data.TensorDataset(logits, labels.long()) 
     return dataset_logits
 
-def get_logits_dataset(modelname, datasetname, datasetpath, cache=str(pathlib.Path(__file__).parent.absolute()) + '/experiments/.cache/'):
+def get_logits_dataset(modelname, datasetname, datasetpath, cache= dirname + '/.cache/'):
     fname = cache + datasetname + '/' + modelname + '.pkl' 
 
     # If the file exists, load and return it.
@@ -204,3 +202,20 @@ def get_logits_dataset(modelname, datasetname, datasetpath, cache=str(pathlib.Pa
         pickle.dump(dataset_logits, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     return dataset_logits
+
+def fix_randomness(seed=0):
+    np.random.seed(seed=seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    random.seed(seed)
+
+def get_imagenet_classes():
+    df = pd.read_csv(dirname + '/map_clsloc.txt', delimiter=' ')
+    arr = df['name'].to_numpy()
+    return arr
+
+def get_metrics_precomputed(est_labels,labels,losses,num_classes):
+    labels = torch.nn.functional.one_hot(labels,num_classes)
+    empirical_losses = (losses.view(1,-1) * (labels * (1-est_labels))).sum(dim=1)
+    sizes = est_labels.sum(dim=1)
+    return empirical_losses, sizes 

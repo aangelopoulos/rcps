@@ -62,14 +62,17 @@ def trial_precomputed(scores,labels,gamma,delta,num_lam,num_calib,batch_size,tla
 def plot_histograms(df_list,gamma,delta,bounds_to_plot):
     rig, axs = plt.subplots(nrows=1,ncols=2,figsize=(12,3))
 
-    minrecall = min([df['recall'].min() for df in df_list])
-    maxrecall = min([df['recall'].max() for df in df_list])
+    for df in df_list:
+        df['risk'] = 1-df['recall']
+
+    minrecall = min([df['risk'].min() for df in df_list])
+    maxrecall = min([df['risk'].max() for df in df_list])
 
     recall_bins = np.arange(minrecall, maxrecall, 0.002) 
     
     for i in range(len(df_list)):
         df = df_list[i]
-        axs[0].hist(np.array(df['recall'].tolist()), recall_bins, alpha=0.7, density=True)
+        axs[0].hist(np.array(df['risk'].tolist()), recall_bins, alpha=0.7, density=True)
 
         # Sizes will be 10 times as big as recall, since we pool it over runs.
         sizes = torch.cat(df['size'].tolist(),dim=0).numpy()
@@ -87,7 +90,7 @@ def plot_histograms(df_list,gamma,delta,bounds_to_plot):
     sns.despine(ax=axs[1],top=True,right=True)
     #axs[1].legend()
     plt.tight_layout()
-    plt.savefig('../' + (f'outputs/histograms/{gamma}_{delta}_histograms').replace('.','_') + '.pdf')
+    plt.savefig('../' + (f'outputs/histograms/{gamma}_{delta}_coco_histograms').replace('.','_') + '.pdf')
 
 def experiment(gamma,delta,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,num_trials,maxiters,bounds_to_plot):
     df_list = []
