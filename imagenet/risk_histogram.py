@@ -75,7 +75,7 @@ def plot_histograms(df_list,gamma,delta,bounds_to_plot):
     minrisk = min([df['risk'].min() for df in df_list])
     maxrisk = min([df['risk'].max() for df in df_list])
 
-    risk_bins = np.arange(minrisk, maxrisk, 0.002) 
+    risk_bins = np.arange(minrisk, maxrisk, 0.001) 
     
     for i in range(len(df_list)):
         df = df_list[i]
@@ -96,10 +96,14 @@ def plot_histograms(df_list,gamma,delta,bounds_to_plot):
     axs[0].locator_params(axis='x', nbins=5)
     axs[0].set_ylabel('density')
     axs[0].set_yticks([0,100])
+    axs[0].axvline(x=gamma,c='#999999',linestyle='--',alpha=0.7)
     axs[1].set_xlabel('size')
     sns.despine(ax=axs[0],top=True,right=True)
     sns.despine(ax=axs[1],top=True,right=True)
-    axs[1].legend()
+    if 'Conformal' not in bounds_to_plot:
+        axs[1].set_xlim([0.5,rolb])
+    if len(bounds_to_plot) > 1:
+        axs[1].legend()
     plt.tight_layout()
     plt.savefig( (f'outputs/histograms/{gamma}_{delta}_{num_calib}_imagenet_histograms').replace('.','_') + '.pdf')
 
@@ -114,7 +118,7 @@ def experiment(losses,gamma,delta,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,eps
             bound_fn = None
         else:
             raise NotImplemented
-        fname = f'.cache/{gamma}_{delta}_{num_lam}_{num_calib}_{bound_str}_dataframe.pkl'
+        fname = f'.cache/{gamma}_{delta}_{num_lam}_{num_calib}_{num_trials}_{bound_str}_dataframe.pkl'
 
         df = pd.DataFrame(columns = ["$\\hat{\\lambda}$","risk","sizes","gamma","delta"])
         try:
@@ -175,18 +179,18 @@ if __name__ == "__main__":
     sns.set_style('white')
     fix_randomness(seed=0)
 
-    bounds_to_plot = ['Conformal', 'HBB']
+    bounds_to_plot = ['HBB']
 
     losses = torch.ones((1000,))
     gammas = [0.1,0.05]
     deltas = [0.1,0.1]
     params = list(zip(gammas,deltas))
     num_lam = 1500 
-    num_calib = 4000 
+    num_calib = 30000 
     num_grid_hbb = 200
     epsilon = 1e-10 
     maxiters = int(1e5)
-    num_trials = 100
+    num_trials = 1000
     ub = 0.2
     ub_sigma = np.sqrt(2)
     
