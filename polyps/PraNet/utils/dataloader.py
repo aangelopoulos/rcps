@@ -102,8 +102,8 @@ class test_dataset:
         image = self.transform(image).unsqueeze(0)
         gt = self.binary_loader(self.gts[self.index])
         name = self.images[self.index].split('/')[-1]
-        if name.endswith('.jpg'):
-            name = name.split('.jpg')[0] + '.png'
+        #if name.endswith('.jpg'):
+        #    name = name.split('.jpg')[0] + '.png'
         self.index += 1
         return image, gt, name
 
