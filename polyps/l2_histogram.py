@@ -18,7 +18,7 @@ import pdb
 
 def trial(img_names, sigmoids, masks, gamma, delta, num_calib, num_lam, lam_lim):
     _, _, calib_sigmoids, calib_masks, val_sigmoids, val_masks = calib_test_split(img_names, sigmoids, masks, num_calib)
-    lambda_hat = get_lambda_hat_01(calib_sigmoids, calib_masks, gamma, delta, num_lam, lam_lim)
+    lambda_hat = get_lambda_hat(calib_sigmoids, calib_masks, gamma, delta, risk_01, num_lam, lam_lim)
     empirical_risk, _ = risk_01(val_sigmoids, val_masks, lambda_hat)
     avg_polyp_size = val_masks.sum(dim=1).sum(dim=1).mean()
     avg_set_size = (val_sigmoids >= -lambda_hat).float().sum(dim=1).sum(dim=1).mean()
@@ -41,7 +41,7 @@ def plot_histogram(df, gamma, delta, num_calib, output_dir):
     sns.despine(top=True, right=True, ax=axs[0])
     sns.despine(top=True, right=True, ax=axs[1])
     plt.tight_layout()
-    plt.savefig( output_dir + (f'{gamma}_{delta}_{num_calib}_polyp_clt_histograms').replace('.','_') + '.pdf'  )
+    plt.savefig( output_dir + (f'{gamma}_{delta}_{num_calib}_polyp_l2_histograms').replace('.','_') + '.pdf'  )
 
 def experiment(gamma, delta, num_trials, num_calib, num_lam, lam_lim, output_dir):
     fname = cache_path + f'{gamma}_{delta}_{num_calib}_{num_lam}_dataframe'.replace('.','_') + '.pkl'

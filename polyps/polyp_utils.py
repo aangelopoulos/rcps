@@ -1,3 +1,4 @@
+import faiss
 import torch
 import torch.nn.functional as F
 import numpy as np
@@ -72,28 +73,94 @@ def get_data(cache_path):
         np.save(cache_path + 'masks', masks)
     return img_names, torch.tensor(sigmoids), torch.tensor(masks)
 
-def risk_01(sigmoids, masks, lam): # lambda in [-1,0]
-    sigmoids = sigmoids.view(sigmoids.shape[0],-1)
-    masks = masks.view(masks.shape[0], -1)
-    result = (masks - (sigmoids >= -lam).to(int)) # as lambda grows, the sets grow.
+def empirical_risk_01(T, risk_mass, masks): # lambda in [-1,0]
+    result = (masks - T.to(int)) # as lambda grows, the sets grow.
     F.relu(result, inplace=True) 
-    result = result.to(float).sum(dim=1)/masks.sum(dim=1) # Normalize by the size of the tumor.
+    result = result.to(float).sum(dim=1).sum(dim=1)/masks.sum(dim=1).sum(dim=1) # Normalize by the size of the tumor.
     return result.mean().item(), result.std().item() #first and second moments needed for some bounds 
 
-def get_lambda_hat(sigmoids, masks, gamma, delta, risk_fn, num_lam, lam_lim):
+def risk_mass_01(T, sigmoids):
+    return sigmoids
+
+# TODO: Rewrite this with brentq
+def get_lambda_hat_01(sigmoids, masks, gamma, delta, num_lam, lam_lim):
     lams = torch.linspace(lam_lim[0], lam_lim[1], num_lam)
-    #lams = torch.flip(lams,(0,))
+    lams = torch.flip(lams,(0,)) # starting from the largest values of lambda, then finding the first non-valid one.
     lam = None
+    Tlam = np.zeros_like(sigmoids).astype(bool)
     for i in range(lams.shape[0]):
         lam = lams[i]
-        Rhat, sigmahat = risk_fn(sigmoids, masks, lam)
-        t = norm.ppf(delta)*sigmahat/np.sqrt(sigmoids.shape[0]) 
-        #print(f'\r lambda:{lam:.3f}, gamma:{gamma}, Rhat-t: {(Rhat-t):.3f}', end='')
-        if Rhat <= gamma:
+        risk_mass = risk_mass_01(Tlam, sigmoids)
+        Tlam = risk_mass >= -lam
+        Rhat, sigmahat = empirical_risk_01(Tlam, risk_mass, masks)
+        t = -norm.ppf(delta)*sigmahat/np.sqrt(sigmoids.shape[0]) 
+        print(f'\r lambda:{lam:.3f}, gamma:{gamma}, Rhat+t: {(Rhat+t):.3f}', end='')
+        if Rhat > gamma:
             break
-        if Rhat - t <= gamma:
+        if Rhat + t > gamma:
             break 
-    #print('')
+            if i > 0:
+                lam = lams[i-1] # deal with the edge case where you went slightly too far.
+    print('')
+    return lam.item()
+
+def risk_mass_l2(T, sigmoids, faiss_index_list):
+    ones = np.where(T)
+    zeros = np.where(~T)
+    B = np.sqrt((sigmoids.shape[1]**2) + (sigmoids.shape[2]**2)) # Max risk is length of diagonal in pixels
+    risk_mass = sigmoids * (~T).to(int) # Risk zero for things in the set
+    # Deal with special cases where things are empty
+    if ones[0].shape[0] == 0:
+        risk_mass *= B 
+        return risk_mass, faiss_index_list
+    if zeros[0].shape[0] == 0:
+        return risk_mass, faiss_index_list
+
+    #ones = [x[:,None] for x in ones] # For later concatenation
+    #zeros = [x[:,None] for x in zeros] 
+    # For each image
+    for i in range(T.shape[0]):
+        ones_i = ones[0]==i
+        rows = ones[1][ones_i,None].astype(np.float32)
+        cols = ones[2][ones_i,None].astype(np.float32)
+        faiss_index_list[i].add(np.concatenate((rows,cols),axis=1)) # Add all the 1s from image i to the index. (TODO: Manually check redundancy?)
+         
+        zeros_i = zeros[0]==i
+        rows = zeros[1][zeros_i]
+        cols = zeros[2][zeros_i]
+
+        l2, I = faiss_index_list[i].search(np.concatenate((rows[:,None].astype(np.float32),cols[:,None].astype(np.float32)),axis=1), 1)
+        pdb.set_trace()
+        risk_mass[i][np.ix_(rows,cols)] = torch.tensor(l2) #TODO: THIS IS PROBABLY INCORRECT AS WRITTEN
+             
+    return risk_mass, faiss_index_list
+
+def empirical_risk_l2(T, risk_mass, masks):
+    missed = (masks - T.to(int)) # as lambda grows, the sets grow.
+    F.relu(missed, inplace=True) 
+    missed = (missed.to(float) * risk_mass).sum(dim=1).sum(dim=1) # TODO: Normalize here.
+    return missed.mean().item(), missed.std().item() #first and second moments needed for some bounds 
+
+def get_lambda_hat_l2(sigmoids, masks, gamma, delta, num_lam, lam_lim):
+    lams = torch.linspace(lam_lim[0], lam_lim[1], num_lam)
+    lams = torch.flip(lams,(0,)) # starting from the largest values of lambda, then finding the first non-valid one.
+    lam = None
+    Tlam = torch.zeros_like(sigmoids).to(bool)
+    faiss_index_list = [faiss.IndexFlatL2(2) for i in range(Tlam.shape[0])] # We need a nearest neighbor's call for every image.
+    for i in range(lams.shape[0]):
+        lam = lams[i]
+        risk_mass, faiss_index_list = risk_mass_l2(Tlam, sigmoids, faiss_index_list)
+        Tlam = np.logical_or(Tlam, risk_mass >= -lam) # Add to the set!
+        Rhat, sigmahat = empirical_risk_l2(Tlam, risk_mass, masks)
+        t = -norm.ppf(delta)*sigmahat/np.sqrt(sigmoids.shape[0]) 
+        print(f'\r lambda:{lam:.3f}, gamma:{gamma}, Rhat+t: {(Rhat+t):.3f}', end='')
+        if Rhat > gamma:
+            break
+        if Rhat + t > gamma:
+            break 
+            if i > 0:
+                lam = lams[i-1] # deal with the edge case where you went slightly too far.
+    print('')
     return lam.item()
 
 def calib_test_split(img_names, sigmoids, masks, num_calib):

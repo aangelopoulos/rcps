@@ -33,7 +33,7 @@ def plot_grid(img_list, result_list,output_dir):
 def get_grid(gamma, delta, num_plot, num_calib, num_lam, lam_lim, output_dir):
     img_names, sigmoids, masks = get_data(cache_path)
     calib_img_names, val_img_names, calib_sigmoids, calib_masks, val_sigmoids, val_masks = calib_test_split(img_names, sigmoids, masks, num_calib)
-    lambda_hat = get_lambda_hat(calib_sigmoids, calib_masks, gamma, delta, risk_01, num_lam, lam_lim)
+    lambda_hat = get_lambda_hat_l2(calib_sigmoids, calib_masks, gamma, delta, num_lam, lam_lim)
     efficiency = masks.to(float).mean()/(val_sigmoids >= -lambda_hat).to(float).mean()
     print(f"lambda {lambda_hat:.3f} has efficiency {efficiency:.3f}")
     result = val_masks
@@ -68,8 +68,8 @@ if __name__ == '__main__':
 
         num_plot = 5 
         num_calib = 1000
-        num_lam = 100
-        lam_lim = [-0.7, 0]
+        num_lam = 10
+        lam_lim = [-0.4, -0.3]
         gamma = 0.1
         delta = 0.1
 
