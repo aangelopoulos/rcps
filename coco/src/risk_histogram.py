@@ -60,7 +60,7 @@ def trial_precomputed(scores,labels,gamma,delta,num_lam,num_calib,batch_size,tla
     return prec.mean().item(), rec.mean().item(), size, lhat.item()
 
 def plot_histograms(df_list,gamma,delta,bounds_to_plot):
-    rig, axs = plt.subplots(nrows=1,ncols=2,figsize=(12,3))
+    fig, axs = plt.subplots(nrows=1,ncols=2,figsize=(12,3))
 
     for df in df_list:
         df['risk'] = 1-df['recall']

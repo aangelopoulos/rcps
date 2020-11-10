@@ -16,8 +16,8 @@ import seaborn as sns
 from tqdm import tqdm
 import pdb
 
-def trial(img_names, sigmoids, masks, gamma, delta, num_calib, num_lam, lam_lim):
-    _, _, calib_sigmoids, calib_masks, val_sigmoids, val_masks = calib_test_split(img_names, sigmoids, masks, num_calib)
+def trial(img_names, sigmoids, masks, num_components, gamma, delta, num_calib, num_lam, lam_lim):
+    _, _, calib_sigmoids, val_sigmoids, calib_masks, val_masks = calib_test_split(img_names, sigmoids, masks, num_components, num_calib)
     lambda_hat = get_lambda_hat(calib_sigmoids, calib_masks, gamma, delta, risk_01, num_lam, lam_lim)
     empirical_risk, _ = risk_01(val_sigmoids, val_masks, lambda_hat)
     avg_polyp_size = val_masks.sum(dim=1).sum(dim=1).mean()
@@ -45,7 +45,7 @@ def plot_histogram(df, gamma, delta, num_calib, output_dir):
 
 def experiment(gamma, delta, num_trials, num_calib, num_lam, lam_lim, output_dir):
     fname = cache_path + f'{gamma}_{delta}_{num_calib}_{num_lam}_dataframe'.replace('.','_') + '.pkl'
-    img_names, sigmoids, masks = get_data(cache_path)
+    img_names, sigmoids, masks, num_components = get_data(cache_path)
 
     df = pd.DataFrame(columns=['$\\hat{\\lambda}$','risk','average size', 'average polyp size','gamma','delta'])
     try:
@@ -54,7 +54,7 @@ def experiment(gamma, delta, num_trials, num_calib, num_lam, lam_lim, output_dir
     except:
         print('Performing experiments from scratch.')
         for i in tqdm(range(num_trials)):
-            lambda_hat, empirical_risk, avg_set_size, avg_polyp_size = trial(img_names, sigmoids, masks, gamma, delta, num_calib, num_lam, lam_lim) 
+            lambda_hat, empirical_risk, avg_set_size, avg_polyp_size = trial(img_names, sigmoids, masks, num_components, gamma, delta, num_calib, num_lam, lam_lim) 
             df = df.append({'$\\hat{\\lambda}$': lambda_hat,
                             'risk': empirical_risk,
                             'average size': avg_set_size,
