@@ -44,7 +44,18 @@ def get_lamhat_precomputed(scores, labels, gamma, delta, num_lam, num_calib, tla
         if Rhat + tlambda(Rhat,sigmahat,delta) >= gamma:
             break
 
-    return lam 
+    return lam
+
+def get_conformal_baseline(calib_scores, calib_labels, val_scores, val_labels):
+    lowest_scores = np.zeros((calib_scores.shape[0],))
+    for i in range(calib_scores.shape[0]):
+        lowest_scores[i] = (calib_scores[i][calib_labels[i]==1]).min()
+    lamda = np.quantile(lowest_scores, gamma) 
+    est_labels = (val_scores > lamda).to(float)
+    prec, rec, size = get_metrics_precomputed(est_labels, val_labels)
+    all_correct = torch.relu(val_labels-est_labels).sum(dim=1) == 0
+    return prec.mean().item(), rec.mean().item(), size, lamda.item(), all_correct
+    
 
 def trial_precomputed(scores,labels,gamma,delta,num_lam,num_calib,batch_size,tlambda):
     total=scores.shape[0]
@@ -57,29 +68,35 @@ def trial_precomputed(scores,labels,gamma,delta,num_lam,num_calib,batch_size,tla
     lhat = get_lamhat_precomputed(calib_scores, calib_labels, gamma, delta, num_lam, num_calib, tlambda)
     est_labels = (val_scores > lhat).to(float)
     prec, rec, size = get_metrics_precomputed(est_labels,val_labels)
-    return prec.mean().item(), rec.mean().item(), size, lhat.item()
+    bl_prec, bl_rec, bl_size, bl_lamda, all_correct = get_conformal_baseline(calib_scores, calib_labels, val_scores, val_labels)
+    return prec.mean().item(), rec.mean().item(), size, lhat.item(), bl_prec, bl_rec, bl_size, bl_lamda, all_correct.to(float).mean().item()
 
 def plot_histograms(df_list,gamma,delta,bounds_to_plot):
     fig, axs = plt.subplots(nrows=1,ncols=2,figsize=(12,3))
 
     for df in df_list:
         df['risk'] = 1-df['recall']
+        df['bl_risk'] = 1-df['bl_recall']
 
-    minrecall = min([df['risk'].min() for df in df_list])
-    maxrecall = min([df['risk'].max() for df in df_list])
+    minrecall = min([min(df['risk'].min(),df['bl_risk'].min()) for df in df_list])
+    maxrecall = max([max(df['risk'].max(),df['bl_risk'].max()) for df in df_list])
 
     recall_bins = np.arange(minrecall, maxrecall, 0.002) 
     
     for i in range(len(df_list)):
         df = df_list[i]
-        axs[0].hist(np.array(df['risk'].tolist()), recall_bins, alpha=0.7, density=True)
+        axs[0].hist(np.array(df['risk'].tolist()), recall_bins, alpha=0.7, density=True, label='RCPS')
+        axs[0].hist(np.array(df['bl_risk'].tolist()), recall_bins, alpha=0.7, density=True, label='Conformal')
 
         # Sizes will be 10 times as big as recall, since we pool it over runs.
         sizes = torch.cat(df['size'].tolist(),dim=0).numpy()
-        d = np.diff(np.unique(sizes)).min()
-        lofb = sizes.min() - float(d)/2
-        rolb = sizes.max() + float(d)/2
-        axs[1].hist(sizes, np.arange(lofb,rolb+d, d), label=bounds_to_plot[i], alpha=0.7, density=True)
+        bl_sizes = torch.cat(df['bl_size'].tolist(),dim=0).numpy()
+        all_sizes = np.concatenate((sizes,bl_sizes),axis=0)
+        d = np.diff(np.unique(all_sizes)).min()
+        lofb = all_sizes.min() - float(d)/2
+        rolb = all_sizes.max() + float(d)/2
+        axs[1].hist(sizes, np.arange(lofb,rolb+d, d), label='RCPS', alpha=0.7, density=True)
+        axs[1].hist(bl_sizes, np.arange(lofb,rolb+d, d), label='Conformal', alpha=0.7, density=True)
     
     axs[0].set_xlabel('risk')
     axs[0].locator_params(axis='x', nbins=4)
@@ -88,7 +105,7 @@ def plot_histograms(df_list,gamma,delta,bounds_to_plot):
     axs[1].set_xlabel('size')
     sns.despine(ax=axs[0],top=True,right=True)
     sns.despine(ax=axs[1],top=True,right=True)
-    #axs[1].legend()
+    axs[1].legend()
     plt.tight_layout()
     plt.savefig('../' + (f'outputs/histograms/{gamma}_{delta}_coco_histograms').replace('.','_') + '.pdf')
 
@@ -103,7 +120,7 @@ def experiment(gamma,delta,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,nu
             raise NotImplemented
         fname = f'../.cache/{gamma}_{delta}_{bound_str}_dataframe.pkl'
 
-        df = pd.DataFrame(columns = ["$\\hat{\\lambda}$","precision","recall","size","gamma","delta"])
+        df = pd.DataFrame(columns = ["$\\hat{\\lambda}$","precision","recall","size","gamma","delta", "bl_precision", "bl_recall", "bl_size", "bl_lamda", "bl_cvg"])
         try:
             df = pd.read_pickle(fname)
         except FileNotFoundError:
@@ -135,13 +152,19 @@ def experiment(gamma,delta,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,nu
             tlambda = get_tlambda(num_lam,deltas,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,maxiters,bound_str,bound_fn)
 
             for i in tqdm(range(num_trials)):
-                prec, rec, sz, lhat = trial_precomputed(scores,labels,gamma,delta,num_lam,num_calib,args.batch_size,tlambda)
+                prec, rec, sz, lhat, bl_prec, bl_rec, bl_size, bl_lamda, bl_cvg = trial_precomputed(scores,labels,gamma,delta,num_lam,num_calib,args.batch_size,tlambda)
                 df = df.append({"$\\hat{\\lambda}$": lhat,
                                 "precision": prec,
                                 "recall": rec,
                                 "size": sz,
                                 "gamma": gamma,
-                                "delta": delta}, ignore_index=True)
+                                "delta": delta,
+                                "bl_precision": bl_prec,
+                                "bl_recall": bl_rec,
+                                "bl_size": bl_size,
+                                "bl_lamda": bl_lamda,
+                                "bl_cvg": bl_cvg
+                                }, ignore_index=True)
             df.to_pickle(fname)
         df_list = df_list + [df]
 
@@ -165,7 +188,7 @@ if __name__ == "__main__":
         num_grid_hbb = 200
         epsilon = 1e-10 
         maxiters = int(1e5)
-        num_trials = 10 # should be 1000
+        num_trials = 1000 # should be 1000
         ub = 0.2
         ub_sigma = np.sqrt(2)
         

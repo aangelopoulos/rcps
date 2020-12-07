@@ -3,15 +3,17 @@ import torch.distributed as distributed
 import torch.nn as nn
 
 
-def active_group(active: bool):
+def active_group(active):
     """Initialize a distributed group where each process can independently decide whether to participate or not
 
-    Args:
-        active: Whether this process will be active in the group or not
+    Parameters
+    ----------
+    active : bool
+        Whether this process will be active in the group or not
 
-    Returns:
-        group: A distributed group containing all processes that passed `active=True`,
-            or `None` if all passed `False`
+    Returns
+    -------
+        A distributed group containing all processes that passed `active=True`, or `None` if all passed `False`
     """
     world_size = distributed.get_world_size()
     rank = distributed.get_rank()
@@ -20,16 +22,12 @@ def active_group(active: bool):
     if not hasattr(active_group, "__cache__"):
         active_group.__cache__ = {
             frozenset(range(world_size)): distributed.group.WORLD,
-            frozenset(): None,
+            frozenset(): None
         }
 
     # Gather active status from all workers
-    active = torch.tensor(
-        rank if active else -1, dtype=torch.long, device=torch.cuda.current_device()
-    )
-    active_workers = torch.empty(
-        world_size, dtype=torch.long, device=torch.cuda.current_device()
-    )
+    active = torch.tensor(rank if active else -1, dtype=torch.long, device=torch.cuda.current_device())
+    active_workers = torch.empty(world_size, dtype=torch.long, device=torch.cuda.current_device())
     distributed.all_gather(list(active_workers.unbind(0)), active)
 
     # Create and cache group if it doesn't exist yet
