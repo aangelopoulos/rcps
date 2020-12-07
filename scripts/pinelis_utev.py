@@ -40,7 +40,7 @@ def gridplot_bounds(deltas,ns,cvs,xlims,ylims,labels,maxiters):
     sns.despine(top=True,right=True)
     fig.add_subplot(111,frameon=False)
     plt.tick_params(labelcolor='none', top=False, bottom=False, left=False, right=False)
-    plt.xlabel("R", fontsize=12)
+    plt.xlabel(r'$\delta$', fontsize=12)
     plt.ylabel("Efficiency\n(R-t)/R\n", fontsize=12)
 
     fig.tight_layout()
