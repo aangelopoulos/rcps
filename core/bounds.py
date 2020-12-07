@@ -27,6 +27,9 @@ def bennett_plus(mu, sigma, x, n, num_grid):
 def bentkus_plus(mu, x, n):
     return np.log(max(binom.cdf(np.floor(n*x),n,mu),1e-10))+1
 
+def pinelis_utev(mu, x, n, cv):
+    return -n/(cv**2 + 1) * (1 + x/mu * np.log( x/(np.e*mu) ) )
+
 ### Log upper-tail inequalities of emprical variance
 def hoeffding_var(sigma2, x, n):
     m = np.floor(n/2)
@@ -40,10 +43,10 @@ def maurer_pontil_var(sigma2, x, n):
     return -(n-1)/2/sigma2 * np.maximum(sigma2-x,0)**2
 
 ### Upper confidence bound of empirical variance via Hoeffding-Bentkus-Maurer-Pontil inequality
-def HBMP_sigma_plus(sigmahat, n, delta, maxiters):
-    sigma2hat = sigmahat**2
-    def _tailprob(sigma2):
-        hoeffding_sigma = hoeffding_var(sigma2, sigma2hat, n)
+def HBMP_sigma_plus(sigmahat, n, delta, maxiters): 
+    sigma2hat = sigmahat**2 
+    def _tailprob(sigma2): 
+        hoeffding_sigma = hoeffding_var(sigma2, sigma2hat, n) 
         bentkus_sigma = bentkus_var(sigma2, sigma2hat, n)
         maurer_pontil_sigma = maurer_pontil_var(sigma2, sigma2hat, n)
         return min(hoeffding_sigma, bentkus_sigma, maurer_pontil_sigma)-np.log(delta)
@@ -97,6 +100,14 @@ def hoeffding_mu_plus(muhat, sigmahat, n, delta, num_grid, maxiters):
 def hoeffding_naive_mu_plus(muhat, sigmahat, n, delta, num_grid, maxiters):
     def _tailprob(mu):
         return hoeffding_naive(mu, muhat, n) - np.log(delta)
+    if _tailprob(1-1e-10) > 0:
+        return 1
+    else:
+        return brentq(_tailprob, muhat, 1-1e-10, maxiter=maxiters)
+
+def pinelis_utev_mu_plus(muhat, n, delta, cv, maxiters):
+    def _tailprob(mu):
+        return pinelis_utev(mu, muhat, n, cv) - np.log(delta)
     if _tailprob(1-1e-10) > 0:
         return 1
     else:

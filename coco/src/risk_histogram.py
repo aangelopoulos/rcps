@@ -122,6 +122,7 @@ def experiment(gamma,delta,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,nu
 
         df = pd.DataFrame(columns = ["$\\hat{\\lambda}$","precision","recall","size","gamma","delta", "bl_precision", "bl_recall", "bl_size", "bl_lamda", "bl_cvg"])
         try:
+            pdb.set_trace()
             df = pd.read_pickle(fname)
         except FileNotFoundError:
             dataset = tv.datasets.CocoDetection('../data/val2017','../data/annotations_trainval2017/instances_val2017.json',transform=tv.transforms.Compose([tv.transforms.Resize((args.input_size, args.input_size)),

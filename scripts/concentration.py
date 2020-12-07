@@ -7,22 +7,6 @@ import core.bounds as bounds
 import seaborn as sns
 import pdb
 
-#def invert_bentkus(delta,R,n,B):
-#    binoinv = stats.binom.ppf(delta/np.e,n,R/B)
-#    return (n*R-B*binoinv)/n
-
-#def invert_hoeffding(delta,R,n,B):
-#    return np.sqrt(-np.log(delta)/2/n)*B**2
-
-#def map_bounds_R(bnds,Rs,delta,n,B):
-#    out = []
-#    for bnd in bnds:
-#        bnd_out = np.zeros((Rs.shape[0],)) 
-#        for i in range(Rs.shape[0]):
-#            bnd_out[i] = (Rs[i]-bnd(delta,Rs[i],n,B))/Rs[i] # The percentage of R you need to have.  
-#        out = out + [bnd_out]
-#    return out
-
 def map_bounds_R(bnds,Rs,delta,n,B,num_grid,sigmahat_factor,maxiters):
     Rs = Rs/B
     out = []
