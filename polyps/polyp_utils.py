@@ -1,3 +1,5 @@
+import os, sys, inspect
+sys.path.insert(1, os.path.join(sys.path[0], '../..'))
 import faiss
 import torch
 import torch.nn.functional as F
@@ -104,7 +106,7 @@ def empirical_risk_01(T, risk_mass, masks): # lambda in [-1,0]
 def risk_mass_01(sigmoids):
     return sigmoids
 
-def get_lambda_hat_01(sigmoids, masks, gamma, delta, num_lam, lam_lim):
+def get_lambda_hat_clt_01(sigmoids, masks, gamma, delta, num_lam, lam_lim):
     risk_mass = risk_mass_01(sigmoids)
     def _condition(lam):
         Tlam = risk_mass >= -lam
@@ -210,7 +212,7 @@ def construct_set_l2(sigmoids, dzeta, lam):
         Tlam = Tlam + (risk_mass >= zeta) # This is a logical or operation. Add to the set!
     return Tlam
 
-def get_lambda_hat_l2(sigmoids, masks, gamma, delta, num_lam, lam_lim):
+def get_lambda_hat_clt_l2(sigmoids, masks, gamma, delta, num_lam, lam_lim):
     lams = torch.linspace(lam_lim[0], lam_lim[1], num_lam)
     lams = torch.flip(lams,(0,)) # starting from the largest values of lambda, then finding the first non-valid one.
     lam = None
@@ -313,7 +315,7 @@ def empirical_risk_perpolyp_01(T, risk_mass, masks): # lambda in [-1,0]
 def risk_mass_perpolyp_01(regions):
     return regions
 
-def get_lambda_hat_perpolyp_01(regions, masks, gamma, delta, num_lam, lam_lim):
+def get_lambda_hat_clt_perpolyp_01(regions, masks, gamma, delta, num_lam):
     risk_mass = risk_mass_perpolyp_01(regions)
     def _condition(lam):
         Tlam = risk_mass >= -lam
@@ -321,6 +323,21 @@ def get_lambda_hat_perpolyp_01(regions, masks, gamma, delta, num_lam, lam_lim):
         t = -norm.ppf(delta)*sigmahat/np.sqrt(regions.shape[0]) 
         return Rhat + t - gamma
     return brentq(_condition, -0.01, -0.99, xtol=1e-3, rtol=1e-3) 
+
+def get_lambda_hat_hbb_perpolyp_01(regions, masks, gamma, delta, num_lam, tlambda):
+    lams = torch.linspace(-1,-0.29,num_lam).flip(dims=(0,))
+    lam = None
+    risk_mass = risk_mass_perpolyp_01(regions)
+    for i in range(lams.shape[0]):
+        lam = lams[i]
+        est_labels = risk_mass >= -lam
+        Rhat, sigmahat = empirical_risk_perpolyp_01(est_labels, risk_mass, masks)
+        if Rhat >= gamma:
+            break
+        if Rhat + tlambda(Rhat, sigmahat, delta) >= gamma:
+            break
+
+    return lam
 
 #def get_lambda_hat_perpolyp_01(sigmoids, masks, gamma, delta, num_lam, lam_lim):
 #    lams = torch.linspace(lam_lim[0], lam_lim[1], num_lam)
