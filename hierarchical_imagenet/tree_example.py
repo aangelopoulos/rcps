@@ -42,5 +42,11 @@ if __name__ == "__main__":
 
     imagenet_dict = json.loads(data)
     t = dict2tree(imagenet_dict)
+    idx_dict = getIndexDict(t)
+    name_dict = getNameDict(t)
+
+    st = getSubTree([9, 10],idx_dict,name_dict)
+    l = idx_dict[500]
+    d = getSubtreeLeafDistance(st, l)
     
     pdb.set_trace()

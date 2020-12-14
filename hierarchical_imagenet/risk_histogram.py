@@ -15,19 +15,55 @@ from tqdm import tqdm
 from utils import *
 import seaborn as sns
 from core.concentration import *
-from conformal import platt_logits, ConformalModelScores
+from ntree import *
+import copy
 import pdb
 
-def get_lamhat_precomputed(scores, labels, losses, gamma, delta, num_lam, num_calib, tlambda):
-    lams = torch.linspace(0,1,num_lam)
+def subtree_sum_scores(memo, i, st, score, name_dict): # one at a time; score is a vector. i is for memoization
+    if memo != None  and  st.name + str(i) in memo:
+        return memo[st.name + str(i)]
+    else:
+        # else
+        sum_scores = score[st.index] if st.index >= 0 else 0 
+        for child in st.children:
+            sum_scores += subtree_sum_scores(memo, i, child, score, name_dict)
+        if memo != None:
+            memo[st.name + str(i)] = sum_scores # add to cache
+        return sum_scores
+
+def hierarchical_loss(st, labels, idx_dict, name_dict):
+    B = getMaxDepth(name_dict[idx_dict[0].parents[0]], idx_dict, name_dict)
+    dists = np.zeros((len(st),))
+    l_node = [copy.deepcopy(idx_dict[int(l)]) for l in labels.numpy()]
+    for i in range(len(st)):
+        dists[i] = getSubtreeLeafDistance(st[i],l_node[i])/B
+    return dists
+
+def get_subtree(scores, lam, idx_dict, name_dict, memo):
+    start = torch.argmax(scores, dim=1).numpy() 
+    st = [copy.deepcopy(idx_dict[s]) for s in start] # subtrees
+
+    for i in range(start.shape[0]):
+        parent_index = 0
+        curr_sos = subtree_sum_scores(memo, i, name_dict[st[i].parents[parent_index]], scores[i], name_dict)
+        if (i % 100) == 0:
+            print(f'{i}\r', end='')
+        while parent_index < len(st[i].parents) and curr_sos > -lam:
+            parent_index += 1
+            curr_sos = subtree_sum_scores(memo, i, name_dict[st[i].parents[min(parent_index,len(st[i].parents)-1)]], scores[i], name_dict) # TODO: This min shouldn't be here
+        st[i] = name_dict[st[i].parents[min(parent_index,len(st[i].parents)-1)]]
+    return st
+
+def get_lamhat_precomputed(scores, labels, idx_dict, name_dict, gamma, delta, num_lam, num_calib, tlambda, memo):
+    lams = torch.linspace(-0.25,-0.15,20) # totally heuristic
     lam = None
-    labels_onehot = torch.nn.functional.one_hot(labels,scores.shape[1])
     for i in range(lams.shape[0]):
         lam = lams[i]
-        est_labels_onehot = (losses.view(1,-1) * scores > lam).to(float) 
-        true_loss = (losses.view(1,-1) * torch.nn.functional.relu(labels_onehot - est_labels_onehot)).sum(dim=1)
+        st = get_subtree(scores, lam, idx_dict, name_dict, memo)
+        true_loss = hierarchical_loss(st, labels, idx_dict, name_dict)
         Rhat = true_loss.mean()
         sigmahat = true_loss.std()
+        print(f"lam:{lam}, Rplust:{Rhat + tlambda(Rhat, sigmahat, delta)}")
         if Rhat >= gamma:
             break
         if Rhat + tlambda(Rhat,sigmahat,delta) >= gamma:
@@ -35,28 +71,7 @@ def get_lamhat_precomputed(scores, labels, losses, gamma, delta, num_lam, num_ca
 
     return lam 
 
-def conformal_trial_precomputed(scores,labels,losses,gamma,delta,num_calib,batch_size,randomized=True):
-    total=scores.shape[0]
-    perm = torch.randperm(scores.shape[0])
-    scores = scores[perm]
-    labels = labels[perm]
-    calib_scores, val_scores = (scores[0:num_calib], scores[num_calib:])
-    calib_labels, val_labels = (labels[0:num_calib], labels[num_calib:])
-    # make datasets
-    dset_cal = torch.utils.data.TensorDataset(calib_scores,calib_labels.long())
-    dset_val = torch.utils.data.TensorDataset(val_scores,val_labels.long())
-
-    # Prepare the loaders
-    loader_cal = torch.utils.data.DataLoader(dset_cal, batch_size = batch_size, shuffle=False, pin_memory=True)
-    loader_val = torch.utils.data.DataLoader(dset_val, batch_size = batch_size, shuffle=False, pin_memory=True)
-    # Conformalize the model
-    conformal_model = ConformalModelScores(None, loader_cal, alpha=gamma, randomized=randomized, naive=False) # RAPS
-    # Collect results
-    risks_avg, sizes = validate(loader_val, conformal_model, losses, print_bool=False)
-    sizes = torch.tensor(np.concatenate(sizes,axis=0))
-    return risks_avg, sizes, 0 
-
-def trial_precomputed(scores, labels, losses, gamma,delta,num_lam,num_calib,batch_size,tlambda):
+def trial_precomputed(scores, labels, idx_dict, name_dict, gamma,delta,num_lam,num_calib,batch_size,tlambda):
     total=scores.shape[0]
     perm = torch.randperm(scores.shape[0])
     scores = scores[perm]
@@ -64,10 +79,17 @@ def trial_precomputed(scores, labels, losses, gamma,delta,num_lam,num_calib,batc
     calib_scores, val_scores = (scores[0:num_calib], scores[num_calib:])
     calib_labels, val_labels = (labels[0:num_calib], labels[num_calib:])
 
-    lhat = get_lamhat_precomputed(calib_scores, calib_labels, losses, gamma, delta, num_lam, num_calib, tlambda)
-    est_labels = (val_scores > lhat).to(float)
-    risks, sizes = get_metrics_precomputed(est_labels,val_labels,losses,scores.shape[1])
-    return risks.mean(), sizes, lhat.item()
+    memo = {} # dict for memoizing the subtree sums.
+    lhat = get_lamhat_precomputed(calib_scores, calib_labels, idx_dict, name_dict, gamma, delta, num_lam, num_calib, tlambda, memo)
+
+    memo = None # no more memo.
+    st = get_subtree(val_scores, lhat, idx_dict, name_dict, memo)
+
+    losses = hierarchical_loss(st, val_labels, idx_dict, name_dict)
+
+    heights = torch.tensor(np.array([len(s.children) for s in st]))
+
+    return losses.mean(), heights, lhat.item()
 
 def plot_histograms(df_list,gamma,delta,bounds_to_plot):
     fig, axs = plt.subplots(nrows=1,ncols=2,figsize=(12,3))
@@ -79,14 +101,10 @@ def plot_histograms(df_list,gamma,delta,bounds_to_plot):
     
     for i in range(len(df_list)):
         df = df_list[i]
-        # Use the same binning for everybody except conformal
-        if bounds_to_plot[i] == 'Conformal':
-            axs[0].hist(np.array(df['risk'].tolist()), None, alpha=0.7, density=True)
-        else:
-            axs[0].hist(np.array(df['risk'].tolist()), risk_bins, alpha=0.7, density=True)
+        axs[0].hist(np.array(df['risk'].tolist()), risk_bins, alpha=0.7, density=True)
 
         # Sizes will be 10 times as big as risk, since we pool it over runs.
-        sizes = torch.cat(df['sizes'].tolist(),dim=0).numpy()
+        sizes = torch.cat(df['heights'].tolist(),dim=0).numpy()
         d = np.diff(np.unique(sizes)).min()
         lofb = sizes.min() - float(d)/2
         rolb = sizes.max() + float(d)/2
@@ -97,15 +115,21 @@ def plot_histograms(df_list,gamma,delta,bounds_to_plot):
     axs[0].set_ylabel('density')
     axs[0].set_yticks([0,100])
     axs[0].axvline(x=gamma,c='#999999',linestyle='--',alpha=0.7)
-    axs[1].set_xlabel('size')
+    axs[1].set_xlabel('height')
     sns.despine(ax=axs[0],top=True,right=True)
     sns.despine(ax=axs[1],top=True,right=True)
-    if 'Conformal' not in bounds_to_plot:
-        axs[1].set_xlim([0.5,rolb])
-    if len(bounds_to_plot) > 1:
-        axs[1].legend()
+    axs[1].set_xlim([-0.5,rolb])
     plt.tight_layout()
-    plt.savefig( (f'outputs/histograms/{gamma}_{delta}_{num_calib}_imagenet_histograms').replace('.','_') + '.pdf')
+    plt.savefig( (f'outputs/histograms/{gamma}_{delta}_{num_calib}_hierarchical_imagenet_histograms').replace('.','_') + '.pdf')
+
+def load_imagenet_tree():
+    with open('./mobilenet.json', 'r') as file:
+        data = file.read()
+    imagenet_dict = json.loads(data)
+    t = dict2tree(imagenet_dict)
+    idx_dict = getIndexDict(t)
+    name_dict = getNameDict(t)
+    return idx_dict, name_dict
 
 def experiment(losses,gamma,delta,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,num_trials,maxiters,bounds_to_plot, batch_size=128):
     df_list = []
@@ -114,13 +138,11 @@ def experiment(losses,gamma,delta,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,eps
             bound_fn = bentkus_mu_plus
         elif bound_str == 'HBB':
             bound_fn = HBB_mu_plus
-        elif bound_str == 'Conformal':
-            bound_fn = None
         else:
             raise NotImplemented
-        fname = f'.cache/{gamma}_{delta}_{num_lam}_{num_calib}_{num_trials}_{bound_str}_dataframe.pkl'
+        fname = f'.cache/{gamma}_{delta}_{num_lam}_{num_calib}_{num_trials}_{bound_str}_hierarchical_dataframe.pkl'
 
-        df = pd.DataFrame(columns = ["$\\hat{\\lambda}$","risk","sizes","gamma","delta"])
+        df = pd.DataFrame(columns = ["$\\hat{\\lambda}$","risk","heights","gamma","delta"])
         try:
             df = pd.read_pickle(fname)
         except FileNotFoundError:
@@ -133,19 +155,17 @@ def experiment(losses,gamma,delta,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,eps
             logits, labels = dataset_precomputed.tensors
             scores = (logits/T.cpu()).softmax(dim=1)
 
+            idx_dict, name_dict = load_imagenet_tree()
+
             with torch.no_grad():
                 # get the precomputed binary search
-                if bound_str != 'Conformal':
-                    tlambda = get_tlambda(num_lam,deltas,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,maxiters,bound_str,bound_fn)
+                tlambda = get_tlambda(num_lam,deltas,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,maxiters,bound_str,bound_fn)
 
                 for i in tqdm(range(num_trials)):
-                    if bound_str == 'Conformal':
-                        risk, sizes, lhat = conformal_trial_precomputed(scores,labels,losses,gamma,delta,num_calib,batch_size)
-                    else:
-                        risk, sizes, lhat = trial_precomputed(scores,labels,losses,gamma,delta,num_lam,num_calib,batch_size,tlambda)
+                    risk, heights, lhat = trial_precomputed(scores, labels, idx_dict, name_dict, gamma,delta,num_lam,num_calib,batch_size,tlambda)
                     df = df.append({"$\\hat{\\lambda}$": lhat,
                                     "risk": risk,
-                                    "sizes": sizes,
+                                    "heights": heights,
                                     "gamma": gamma,
                                     "delta": delta}, ignore_index=True)
                 df.to_pickle(fname)
@@ -182,15 +202,15 @@ if __name__ == "__main__":
     bounds_to_plot = ['HBB']
 
     losses = torch.ones((1000,))
-    gammas = [0.1,0.05]
-    deltas = [0.1,0.1]
+    gammas = [0.05]
+    deltas = [0.1]
     params = list(zip(gammas,deltas))
     num_lam = 1500 
     num_calib = 30000 
     num_grid_hbb = 200
     epsilon = 1e-10 
     maxiters = int(1e5)
-    num_trials = 1000
+    num_trials = 100 
     ub = 0.2
     ub_sigma = np.sqrt(2)
     

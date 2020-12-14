@@ -26,12 +26,14 @@ class Node():
         return len(self.children) == 0
 
 def getCommonParent(n1,n2):
-    commonParents = [p for p in [n1] + n1.parents if p in [n2] + n2.parents]
-    return commonParents[0]
+    commonParents = [p for p in n1.parents if p in n2.parents]
+    return commonParents[-1]
 
 def getSubtreeLeafDistance(t,l):
     p = getCommonParent(t,l)
-    return ([t] + t.parents).index(p)
+    ls = t.parents.copy()
+    ls.reverse()
+    return ls.index(p)
 
 def dict2tree(d,root=[]):
     try:
@@ -48,6 +50,38 @@ def dict2tree(d,root=[]):
         children = []
     root = root + [ d['name'] ]
     return Node(d['id'], d['name'], sift, index, [ dict2tree(d2, root) for d2 in children ], root )
+
+def getIndexDict(t):
+    myDict = {}
+    if t.index >= 0:
+        myDict[t.index] = t
+    childDict = {}
+    for child in t.children:
+        childDict = {**childDict, **getIndexDict(child)}
+    return {**myDict, **childDict} 
+
+def getNameDict(t):
+    myDict = {}
+    myDict[t.name] = t
+    childDict = {}
+    for child in t.children:
+        childDict = {**childDict, **getNameDict(child)}
+    return {**myDict, **childDict} 
+
+def intersection(lol): 
+    l = lol[0]
+    for i in range(1,len(lol)):
+        l = [x for x in lol[i] if x in l]
+    return l
+
+def getSubTree(idxs,idx_dict,name_dict):
+    lol = [idx_dict[i].parents for i in idxs]
+    name = intersection(lol)[-1]
+    return  name_dict[name]
+
+def getMaxDepth(st,idx_dict,name_dict):
+    depths = [len(getSubTree([i], idx_dict, name_dict).parents)-1 for i in range(len(idx_dict.keys()))]
+    return max(depths)
 
 if __name__ == "__main__":
     print("tree class")
