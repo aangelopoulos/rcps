@@ -73,8 +73,8 @@ def experiment(losses,gamma,delta,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,eps
                                              std =[0.229, 0.224, 0.225])
                         ])
         
-        num_test = 500 
-        num_plot = 8 
+        num_test = 1500 
+        num_plot = 12 
         dataset = torchvision.datasets.ImageFolder('/scratch/group/ilsvrc/val/', transform)
 
         memo = None 
@@ -174,7 +174,7 @@ def gridplot_imgs(imgs,est_labels,labels,rows,cols):
 
     plt.tight_layout()
     plt.subplots_adjust(wspace=0.05,hspace=0.05)
-    plt.savefig('./outputs/grid_fig.pdf')
+    plt.savefig('./outputs/hierarchical_grid_fig.pdf')
 
 if __name__ == "__main__":
     sns.set(palette='pastel',font='serif')

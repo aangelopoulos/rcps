@@ -97,7 +97,7 @@ def plot_histograms(df_list,gamma,delta,bounds_to_plot):
     minrisk = min([df['risk'].min() for df in df_list])
     maxrisk = min([df['risk'].max() for df in df_list])
 
-    risk_bins = np.arange(minrisk, maxrisk, 0.001) 
+    risk_bins = np.arange(minrisk, maxrisk, 0.0005) 
     
     for i in range(len(df_list)):
         df = df_list[i]
@@ -116,6 +116,7 @@ def plot_histograms(df_list,gamma,delta,bounds_to_plot):
     axs[0].set_yticks([0,100])
     axs[0].axvline(x=gamma,c='#999999',linestyle='--',alpha=0.7)
     axs[1].set_xlabel('height')
+    axs[1].set_yscale('log')
     sns.despine(ax=axs[0],top=True,right=True)
     sns.despine(ax=axs[1],top=True,right=True)
     axs[1].set_xlim([-0.5,rolb])
