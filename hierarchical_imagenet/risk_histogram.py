@@ -15,6 +15,7 @@ from tqdm import tqdm
 from utils import *
 import seaborn as sns
 from core.concentration import *
+from scipy.optimize import brentq
 from ntree import *
 import copy
 import pdb
@@ -38,6 +39,14 @@ def hierarchical_loss(st, labels, idx_dict, name_dict):
     for i in range(len(st)):
         dists[i] = getSubtreeLeafDistance(st[i],l_node[i])/B
     return dists
+
+def get_heights(st, scores, labels, idx_dict, name_dict):
+    heights = np.zeros((len(st),)) 
+    starting_nodes = scores.argmax(dim=1)
+    for i in range(len(st)):
+       st_leaf = idx_dict[starting_nodes[i].item()]
+       heights[i] = len(st_leaf.parents) - len(st[i].parents) 
+    return heights
 
 def get_subtree(scores, lam, idx_dict, name_dict, memo):
     start = torch.argmax(scores, dim=1).numpy() 
@@ -71,25 +80,41 @@ def get_lamhat_precomputed(scores, labels, idx_dict, name_dict, gamma, delta, nu
 
     return lam 
 
-def trial_precomputed(scores, labels, idx_dict, name_dict, gamma,delta,num_lam,num_calib,batch_size,tlambda):
-    total=scores.shape[0]
-    perm = torch.randperm(scores.shape[0])
-    scores = scores[perm]
-    labels = labels[perm]
-    calib_scores, val_scores = (scores[0:num_calib], scores[num_calib:])
-    calib_labels, val_labels = (labels[0:num_calib], labels[num_calib:])
+def get_lamhat_table(calib_table, lambdas_example_table, gamma, delta, num_lam, num_calib, tlambda):
+    calib_table = calib_table[:,::-1]
+    avg_loss = calib_table.mean(axis=0)
+    std_loss = calib_table.std(axis=0)
 
-    memo = {} # dict for memoizing the subtree sums.
-    lhat = get_lamhat_precomputed(calib_scores, calib_labels, idx_dict, name_dict, gamma, delta, num_lam, num_calib, tlambda, memo)
+    # loss is monotonic so we can do a binary search.
+    #def _condition(i):
+    #    i = int(np.floor(i))
+    #    Rhat = avg_loss[i]
+    #    sigmahat = std_loss[i]
+    #    return (Rhat >= gamma) or (Rhat + tlambda(Rhat, sigmahat, delta) >= gamma)
+    
+    #idx = int(np.ceil(brentq(_condition,0, len(lambdas_example_table)-1, xtol=0.5)))
 
-    memo = None # no more memo.
-    st = get_subtree(val_scores, lhat, idx_dict, name_dict, memo)
+    for i in range(1,len(lambdas_example_table)):
+        Rhat = avg_loss[i]
+        sigmahat = std_loss[i]
+        if (Rhat >= gamma) or (Rhat + tlambda(Rhat, sigmahat, delta) >= gamma):
+            return lambdas_example_table[-(i-1)] # is this correct?
 
-    losses = hierarchical_loss(st, val_labels, idx_dict, name_dict)
+    return lambdas_example_table[-idx] #lambdas_example_table[0]
 
-    heights = torch.tensor(np.array([len(s.children) for s in st]))
+def trial_precomputed(example_loss_table, example_height_table, lambdas_example_table, gamma, delta, num_lam, num_calib, batch_size, tlambda):
+    total=example_loss_table.shape[0]
+    perm = torch.randperm(example_loss_table.shape[0])
+    example_loss_table = example_loss_table[perm]
+    calib_losses, val_losses = (example_loss_table[0:num_calib], example_loss_table[num_calib:])
+    calib_heights, val_heights = (example_height_table[0:num_calib], example_height_table[num_calib:])
 
-    return losses.mean(), heights, lhat.item()
+    lhat = get_lamhat_table(calib_losses, lambdas_example_table, gamma, delta, num_lam, num_calib, tlambda)
+
+    losses = val_losses[:,np.argmax(lambdas_example_table == lhat)]
+    heights = val_heights[:,np.argmax(lambdas_example_table == lhat)]
+
+    return losses.mean(), torch.tensor(heights), lhat
 
 def plot_histograms(df_list,gamma,delta,bounds_to_plot):
     fig, axs = plt.subplots(nrows=1,ncols=2,figsize=(12,3))
@@ -132,7 +157,31 @@ def load_imagenet_tree():
     name_dict = getNameDict(t)
     return idx_dict, name_dict
 
-def experiment(losses,gamma,delta,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,num_trials,maxiters,bounds_to_plot, batch_size=128):
+def get_example_loss_and_height_tables(scores, labels, idx_dict, name_dict, lambdas_example_table, num_calib):
+    lam_len = len(lambdas_example_table)
+    lam_low = min(lambdas_example_table)
+    lam_high = max(lambdas_example_table)
+    fname_loss = f'./.cache/{lam_low}_{lam_high}_{lam_len}_example_loss_table.npy'
+    fname_height = f'./.cache/{lam_low}_{lam_high}_{lam_len}_example_height_table.npy'
+    try:
+        loss_table = np.load(fname_loss)
+        height_table = np.load(fname_height)
+    except:
+        loss_table = np.zeros((scores.shape[0], lam_len))
+        height_table = np.zeros((scores.shape[0], lam_len))
+        memo = {}
+        for j in range(lam_len):
+            sts = get_subtree(scores, lambdas_example_table[j], idx_dict, name_dict, memo)
+            losses_lam = hierarchical_loss(sts,labels,idx_dict,name_dict)
+            loss_table[:,j] = losses_lam
+            height_table[:,j] = get_heights(sts, scores, labels, idx_dict, name_dict)
+
+        np.save(fname_loss, loss_table)
+        np.save(fname_height, height_table)
+
+    return loss_table, height_table
+
+def experiment(losses,gamma,delta,lambdas_example_table,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,num_trials,maxiters,bounds_to_plot,batch_size=128):
     df_list = []
     for bound_str in bounds_to_plot:
         if bound_str == 'Bentkus':
@@ -161,17 +210,16 @@ def experiment(losses,gamma,delta,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,eps
             with torch.no_grad():
                 # get the precomputed binary search
                 tlambda = get_tlambda(num_lam,deltas,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,maxiters,bound_str,bound_fn)
+                example_loss_table, example_height_table = get_example_loss_and_height_tables(scores, labels, idx_dict, name_dict, lambdas_example_table, num_calib)
 
                 for i in tqdm(range(num_trials)):
-                    risk, heights, lhat = trial_precomputed(scores, labels, idx_dict, name_dict, gamma,delta,num_lam,num_calib,batch_size,tlambda)
+                    risk, heights, lhat = trial_precomputed(example_loss_table, example_height_table, lambdas_example_table, gamma, delta, num_lam, num_calib, batch_size, tlambda)
                     df = df.append({"$\\hat{\\lambda}$": lhat,
                                     "risk": risk,
                                     "heights": heights,
                                     "gamma": gamma,
                                     "delta": delta}, ignore_index=True)
-                    if i % 10 == 9:
-                        df.to_pickle(fname + '.ckpt')
-                        plot_histograms([df], gamma, delta, bounds_to_plot)
+            df.to_pickle(fname)
         df_list = df_list + [df]
 
     plot_histograms(df_list,gamma,delta,bounds_to_plot)
@@ -209,16 +257,17 @@ if __name__ == "__main__":
     deltas = [0.1]
     params = list(zip(gammas,deltas))
     num_lam = 1500 
-    num_calib = 30000#30000 
+    num_calib = 30000 
     num_grid_hbb = 200
     epsilon = 1e-10 
     maxiters = int(1e5)
-    num_trials = 100 
+    num_trials = 1000 
     ub = 0.2
     ub_sigma = np.sqrt(2)
+    lambdas_example_table = np.linspace(0,1,1000)
     
     deltas_precomputed = [0.001, 0.01, 0.05, 0.1]
     
     for gamma, delta in params:
         print(f"\n\n\n ============           NEW EXPERIMENT gamma={gamma} delta={delta}           ============ \n\n\n") 
-        experiment(losses,gamma,delta,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,num_trials,maxiters,bounds_to_plot)
+        experiment(losses,gamma,delta,lambdas_example_table,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,num_trials,maxiters,bounds_to_plot)

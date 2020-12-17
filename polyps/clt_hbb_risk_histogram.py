@@ -48,6 +48,7 @@ def plot_histograms(dfs, gamma, delta, num_calib, output_dir):
 
         axs[0].set_xlabel('risk')
         axs[0].locator_params(axis='x', nbins=5)
+        axs[0].axvline(x=gamma,c='#999999',linestyle='--',alpha=0.7)
         axs[0].set_ylabel('density')
         axs[1].set_xlabel('set size as a fraction of mean polyp size')
         axs[1].locator_params(axis='x', nbins=5)
