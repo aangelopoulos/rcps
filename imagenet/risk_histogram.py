@@ -17,44 +17,7 @@ import seaborn as sns
 from core.concentration import *
 from conformal import platt_logits, ConformalModelScores
 import pdb
-#
-#def get_lamhat_precomputed(scores, labels, losses, gamma, delta, num_lam, num_calib, tlambda):
-#    lams = torch.linspace(0,1,num_lam)
-#    lam = None
-#    labels_onehot = torch.nn.functional.one_hot(labels,scores.shape[1])
-#    for i in range(lams.shape[0]):
-#        lam = lams[i]
-#        est_labels_onehot = (losses.view(1,-1) * scores > lam).to(float) 
-#        true_loss = (losses.view(1,-1) * torch.nn.functional.relu(labels_onehot - est_labels_onehot)).sum(dim=1)
-#        Rhat = true_loss.mean()
-#        sigmahat = true_loss.std()
-#        if Rhat >= gamma:
-#            break
-#        if Rhat + tlambda(Rhat,sigmahat,delta) >= gamma:
-#            break
-#
-#    return lam 
 
-#def conformal_trial_precomputed(scores,labels,losses,gamma,delta,num_calib,batch_size,randomized=True):
-#    total=scores.shape[0]
-#    perm = torch.randperm(scores.shape[0])
-#    scores = scores[perm]
-#    labels = labels[perm]
-#    calib_scores, val_scores = (scores[0:num_calib], scores[num_calib:])
-#    calib_labels, val_labels = (labels[0:num_calib], labels[num_calib:])
-#    # make datasets
-#    dset_cal = torch.utils.data.TensorDataset(calib_scores,calib_labels.long())
-#    dset_val = torch.utils.data.TensorDataset(val_scores,val_labels.long())
-#
-#    # Prepare the loaders
-#    loader_cal = torch.utils.data.DataLoader(dset_cal, batch_size = batch_size, shuffle=False, pin_memory=True)
-#    loader_val = torch.utils.data.DataLoader(dset_val, batch_size = batch_size, shuffle=False, pin_memory=True)
-#    # Conformalize the model
-#    conformal_model = ConformalModelScores(None, loader_cal, alpha=gamma, randomized=randomized, naive=False) # RAPS
-#    # Collect results
-#    risks_avg, sizes = validate(loader_val, conformal_model, losses, print_bool=False)
-#    sizes = torch.tensor(np.concatenate(sizes,axis=0))
-#    return risks_avg, sizes, 0 
 def weighted_loss(est_labels_onehot, labels_onehot, losses):
     return (losses.view(1,-1) * torch.nn.functional.relu(labels_onehot - est_labels_onehot)).sum(dim=1)
 
@@ -80,7 +43,7 @@ def get_example_loss_and_size_tables(scores, labels, losses, lambdas_example_tab
 
     return loss_table, sizes_table
 
-def trial_precomputed(example_loss_table, example_size_table, lambdas_example_table, gamma, delta, num_lam, num_calib, batch_size, tlambda):
+def trial_precomputed(example_loss_table, example_size_table, lambdas_example_table, gamma, delta, num_lam, num_calib, batch_size, tlambda, bound_str):
     total=example_loss_table.shape[0]
     perm = torch.randperm(example_loss_table.shape[0])
     example_loss_table = example_loss_table[perm]
@@ -88,7 +51,7 @@ def trial_precomputed(example_loss_table, example_size_table, lambdas_example_ta
     calib_losses, val_losses = (example_loss_table[0:num_calib], example_loss_table[num_calib:])
     calib_sizes, val_sizes = (example_size_table[0:num_calib], example_size_table[num_calib:])
 
-    lhat_rcps = get_lhat_from_table(calib_losses, lambdas_example_table, gamma, delta, tlambda)
+    lhat_rcps = get_lhat_from_table(calib_losses, lambdas_example_table, gamma, delta, tlambda, bound_str)
 
     losses_rcps = val_losses[:,np.argmax(lambdas_example_table == lhat_rcps)]
     sizes_rcps = val_sizes[:,np.argmax(lambdas_example_table == lhat_rcps)]
@@ -105,6 +68,7 @@ def plot_histograms(df_list,gamma,delta,bounds_to_plot):
     
     for i in range(len(df_list)):
         df = df_list[i]
+        print(f"gamma:{gamma}, delta:{delta}, bound:{bounds_to_plot[i]}, coverage:{(df.risk > gamma).mean()}")
         # Use the same binning for everybody except conformal
         if bounds_to_plot[i] == 'Conformal':
             axs[0].hist(np.array(df['risk'].tolist()), None, alpha=0.7, density=True)
@@ -138,8 +102,12 @@ def experiment(losses,gamma,delta,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,lam
     for bound_str in bounds_to_plot:
         if bound_str == 'Bentkus':
             bound_fn = bentkus_mu_plus
+        elif bound_str == 'HB':
+            bound_fn = HB_mu_plus
         elif bound_str == 'HBB':
             bound_fn = HBB_mu_plus
+        elif bound_str == 'WSR':
+            bound_fn = WSR_mu_plus
         elif bound_str == 'Conformal':
             bound_fn = None
         else:
@@ -161,11 +129,11 @@ def experiment(losses,gamma,delta,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,lam
 
             with torch.no_grad():
                 example_loss_table, example_size_table = get_example_loss_and_size_tables(scores, labels, losses, lambdas_example_table, num_calib)
-                tlambda = get_tlambda(num_lam,deltas,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,maxiters,bound_str,bound_fn)
+                tlambda = get_tlambda(num_lam,deltas,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,maxiters,bound_str.lower(), bound_fn)
                 
                 local_df_list = []
                 for i in tqdm(range(num_trials)):
-                    risk, sizes, lhat = trial_precomputed(example_loss_table, example_size_table, lambdas_example_table, gamma, delta, num_lam, num_calib, batch_size, tlambda)
+                    risk, sizes, lhat = trial_precomputed(example_loss_table, example_size_table, lambdas_example_table, gamma, delta, num_lam, num_calib, batch_size, tlambda, bound_str)
                     dict_local = {"$\\hat{\\lambda}$": lhat,
                                     "risk": risk,
                                     "sizes": [sizes],
@@ -207,9 +175,9 @@ if __name__ == "__main__":
     sns.set_style('white')
     fix_randomness(seed=0)
 
-    bounds_to_plot = ['HBB']
+    bounds_to_plot = ['WSR', 'HB']
 
-    losses = torch.ones((1000,))
+    losses = torch.rand((1000,))
     gammas = [0.1,0.05]
     deltas = [0.1,0.1]
     params = list(zip(gammas,deltas))
@@ -218,7 +186,7 @@ if __name__ == "__main__":
     num_grid_hbb = 200
     epsilon = 1e-10 
     maxiters = int(1e5)
-    num_trials = 1000
+    num_trials = 1000 
     ub = 0.2
     ub_sigma = np.sqrt(2)
     lambdas_example_table = np.flip(np.linspace(0,1,1000), axis=0)

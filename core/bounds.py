@@ -68,6 +68,16 @@ def HBB_mu_plus(muhat, sigmahat, n, delta, num_grid, maxiters):
     else:
         return brentq(_tailprob, muhat, 1-1e-10, maxiter=maxiters)
 
+def HB_mu_plus(muhat, sigmahat, n, delta, num_grid, maxiters):
+    def _tailprob(mu):
+        hoeffding_mu = hoeffding_plus(mu, muhat, n) 
+        bentkus_mu = bentkus_plus(mu, muhat, n)
+        return min(hoeffding_mu, bentkus_mu) - np.log(delta)
+    if _tailprob(1-1e-10) > 0:
+        return 1
+    else:
+        return brentq(_tailprob, muhat, 1-1e-10, maxiter=maxiters)
+
 ### UCB of mean via Empirical Bennett
 def empirical_bennett_mu_plus(muhat, sigmahat, n, delta, num_grid, maxiters):
     sigmahat_plus = HBMP_sigma_plus(sigmahat, n, delta/2, maxiters)

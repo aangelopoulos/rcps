@@ -1,7 +1,7 @@
 import os, sys, inspect
 #sys.path.insert(1, os.path.join(sys.path[0], '../..'))
 dir_path = os.path.dirname(os.path.realpath(__file__))
-from core.bounds import bentkus_mu_plus, HBB_mu_plus
+from core.bounds import bentkus_mu_plus, HB_mu_plus, HBB_mu_plus, WSR_mu_plus
 import torch
 import torchvision as tv
 import argparse
@@ -89,7 +89,7 @@ def get_tlambda(npts,deltas,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,maxiters,
 
     return _tlambda
 
-def get_lhat_from_table(calib_loss_table, lambdas_table, gamma, delta, tlambda):
+def get_lhat_from_table(calib_loss_table, lambdas_table, gamma, delta, tlambda, bound_str):
     calib_loss_table = calib_loss_table[:,::-1]
     avg_loss = calib_loss_table.mean(axis=0)
     std_loss = calib_loss_table.std(axis=0)
@@ -97,10 +97,11 @@ def get_lhat_from_table(calib_loss_table, lambdas_table, gamma, delta, tlambda):
     for i in range(1, len(lambdas_table)):
         Rhat = avg_loss[i]
         sigmahat = std_loss[i]
-        if (Rhat >= gamma) or (Rhat + tlambda(Rhat, sigmahat, delta) >= gamma):
-            return lambdas_table[-(i+1)]
+        t = tlambda(Rhat, sigmahat, delta) if bound_str not in ['WSR'] else tlambda(calib_loss_table[:,i], delta)
+        if (Rhat > gamma) or (Rhat + t > gamma):
+            return lambdas_table[-i] #TODO: should this be -i + 1
 
-    return lambdas_table[-i]
+    return lambdas_table[-i+1]
 
 def get_lhat_conformal_from_table(calib_loss_table, lambdas_table, alpha):
     avg_loss = calib_loss_table.mean(axis=0)
