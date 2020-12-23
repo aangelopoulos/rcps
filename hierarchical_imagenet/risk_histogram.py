@@ -63,53 +63,15 @@ def get_subtree(scores, lam, idx_dict, name_dict, memo):
         st[i] = name_dict[st[i].parents[min(parent_index,len(st[i].parents)-1)]]
     return st
 
-def get_lamhat_precomputed(scores, labels, idx_dict, name_dict, gamma, delta, num_lam, num_calib, tlambda, memo):
-    lams = torch.flip(torch.linspace(0.20,0.40,10), dims=(0,)) # totally heuristic
-    lam = None
-    for i in range(lams.shape[0]):
-        lam = lams[i]
-        st = get_subtree(scores, lam, idx_dict, name_dict, memo)
-        true_loss = hierarchical_loss(st, labels, idx_dict, name_dict)
-        Rhat = true_loss.mean()
-        sigmahat = true_loss.std()
-        print(f"lam:{lam}, Rplust:{Rhat + tlambda(Rhat, sigmahat, delta)}")
-        if Rhat >= gamma:
-            break
-        if Rhat + tlambda(Rhat,sigmahat,delta) >= gamma:
-            break
-
-    return lam 
-
-def get_lamhat_table(calib_table, lambdas_example_table, gamma, delta, num_lam, num_calib, tlambda):
-    calib_table = calib_table[:,::-1]
-    avg_loss = calib_table.mean(axis=0)
-    std_loss = calib_table.std(axis=0)
-
-    # loss is monotonic so we can do a binary search.
-    #def _condition(i):
-    #    i = int(np.floor(i))
-    #    Rhat = avg_loss[i]
-    #    sigmahat = std_loss[i]
-    #    return (Rhat >= gamma) or (Rhat + tlambda(Rhat, sigmahat, delta) >= gamma)
-    
-    #idx = int(np.ceil(brentq(_condition,0, len(lambdas_example_table)-1, xtol=0.5)))
-
-    for i in range(1,len(lambdas_example_table)):
-        Rhat = avg_loss[i]
-        sigmahat = std_loss[i]
-        if (Rhat >= gamma) or (Rhat + tlambda(Rhat, sigmahat, delta) >= gamma):
-            return lambdas_example_table[-(i-1)] # is this correct?
-
-    return lambdas_example_table[-idx] #lambdas_example_table[0]
-
 def trial_precomputed(example_loss_table, example_height_table, lambdas_example_table, gamma, delta, num_lam, num_calib, batch_size, tlambda):
     total=example_loss_table.shape[0]
     perm = torch.randperm(example_loss_table.shape[0])
     example_loss_table = example_loss_table[perm]
+    example_height_table = example_height_table[perm]
     calib_losses, val_losses = (example_loss_table[0:num_calib], example_loss_table[num_calib:])
     calib_heights, val_heights = (example_height_table[0:num_calib], example_height_table[num_calib:])
 
-    lhat = get_lamhat_table(calib_losses, lambdas_example_table, gamma, delta, num_lam, num_calib, tlambda)
+    lhat = get_lhat_from_table(calib_losses, lambdas_example_table, gamma, delta, tlambda)
 
     losses = val_losses[:,np.argmax(lambdas_example_table == lhat)]
     heights = val_heights[:,np.argmax(lambdas_example_table == lhat)]

@@ -113,5 +113,20 @@ def pinelis_utev_mu_plus(muhat, n, delta, cv, maxiters):
     else:
         return brentq(_tailprob, muhat, 1-1e-10, maxiter=maxiters)
 
+def WSR_mu_plus(x, delta, maxiters): # this one is different.
+    n = x.shape[0]
+    muhat = (np.cumsum(x) + 0.5) / (1 + np.array(range(1,n+1)))
+    sigma2hat = (np.cumsum((x - muhat)**2) + 0.25) / (1 + np.array(range(1,n+1))) 
+    sigma2hat[1:] = sigma2hat[:-1]
+    sigma2hat[0] = 0.25
+    nu = np.minimum(np.sqrt(2 * np.log( 1 / delta ) / n / sigma2hat), 1)
+    def _Kn(mu):
+        return np.max(np.cumsum(np.log(1 - nu * (x - mu)))) + np.log(delta)
+    if _Kn(1) < 0:
+        return 1
+    return brentq(_Kn, 1e-10, 1-1e-10, maxiter=maxiters)
+
+
 if __name__ == "__main__":
-    print(empirical_bennett_mu_plus(0.1, 0.01, 10000, 0.1, 100))
+    print(empirical_bennett_mu_plus(0.1, 0.01, 10000, 0.1, 100, 1000))
+    print(WSR_mu_plus(0.1+np.random.random(size=(1000,))/100, 0.01, 1000))

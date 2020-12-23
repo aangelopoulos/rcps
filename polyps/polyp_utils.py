@@ -312,6 +312,26 @@ def empirical_risk_perpolyp_01(T, risk_mass, masks): # lambda in [-1,0]
     #result = result.to(float).sum(dim=1).sum(dim=1)/masks.sum(dim=1).sum(dim=1) # Normalize by the size of the tumor.
     return results_perpolyp.mean().item(), results_perpolyp.std().item() #first and second moments needed for some bounds 
 
+def loss_perpolyp_01(T, risk_mass, masks): # lambda in [-1,0]
+    # Get the missed pixels 
+    num_polyps = masks.max(dim=1)[0].max(dim=1)[0]
+    missed = ((masks>0).to(int) - T.to(int)) # as lambda grows, the sets grow.
+    F.relu(missed, inplace=True) 
+    # Split the different polyps into different rows.
+    missed = missed * masks
+    results_perpolyp = torch.zeros((num_polyps.sum().int().item(), masks.shape[1], masks.shape[2]))
+    masks_perpolyp = torch.zeros_like(results_perpolyp)
+    k = 0
+    for n in range(num_polyps.max().int().item()):
+        filter_bool = (num_polyps >= n + 1) # 1, 2, 3 polyps 
+        temp_missed = missed[filter_bool]
+        temp_masks = masks[filter_bool]
+        results_perpolyp[k:k+temp_missed.shape[0]] = (temp_missed == n + 1)
+        masks_perpolyp[k:k+temp_missed.shape[0]] = (temp_masks == n+1)
+        k += temp_missed.shape[0] 
+    results_perpolyp = results_perpolyp.to(float).sum(dim=1).sum(dim=1)/masks_perpolyp.sum(dim=1).sum(dim=1)    
+    return results_perpolyp
+
 def risk_mass_perpolyp_01(regions):
     return regions
 

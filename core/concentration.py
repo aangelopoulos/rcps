@@ -18,6 +18,7 @@ from tqdm import tqdm
 from utils import *
 import itertools
 import seaborn as sns
+from scipy.stats import norm
 from joblib import Parallel
 import pdb
 
@@ -34,6 +35,17 @@ def searchR(Rhat,sigmahat,delta,num_calib,num_grid_hbb,epsilon,maxiters,bound_fn
 def get_tlambda(npts,deltas,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,maxiters,bound_str,bound_fn):
     tlambda_fname = dir_path + '/.cache/' + bound_str.lower() + '_' + str(npts) + '_' + str(num_calib) + '_tlambda_table.pkl'
     npts_sigma = max(int(npts/10),1)
+
+    if bound_str == 'clt':
+        def _tlambda(rhat, sig, delt):
+            return -norm.ppf(delt)*sig/np.sqrt(num_calib) 
+        return _tlambda
+
+    if bound_str == 'wsr':
+        # no good way to cache this :(
+        def _tlambda(losses, delt): # this loss fn has different arguments
+            return WSR_mu_plus(losses, delt, maxiters) - losses.mean() # R^+-Rhat = t
+        return _tlambda
 
     if os.path.exists(tlambda_fname):
         tlams = pkl.load(open(tlambda_fname,'rb'))
@@ -76,6 +88,24 @@ def get_tlambda(npts,deltas,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,maxiters,
         return tlams[r,s,d]
 
     return _tlambda
+
+def get_lhat_from_table(calib_loss_table, lambdas_table, gamma, delta, tlambda):
+    calib_loss_table = calib_loss_table[:,::-1]
+    avg_loss = calib_loss_table.mean(axis=0)
+    std_loss = calib_loss_table.std(axis=0)
+
+    for i in range(1, len(lambdas_table)):
+        Rhat = avg_loss[i]
+        sigmahat = std_loss[i]
+        if (Rhat >= gamma) or (Rhat + tlambda(Rhat, sigmahat, delta) >= gamma):
+            return lambdas_table[-(i+1)]
+
+    return lambdas_table[-i]
+
+def get_lhat_conformal_from_table(calib_loss_table, lambdas_table, alpha):
+    avg_loss = calib_loss_table.mean(axis=0)
+    idx = np.argmax(avg_loss < alpha)
+    return lambdas_table[idx]
 
 def test_table(Rhat,delta,bound_fn):
     sigmahat = np.sqrt(2*Rhat*(1-Rhat))
