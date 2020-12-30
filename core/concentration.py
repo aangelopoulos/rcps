@@ -33,7 +33,8 @@ def searchR(Rhat,sigmahat,delta,num_calib,num_grid_hbb,epsilon,maxiters,bound_fn
     return max(root,epsilon)
 
 def get_tlambda(npts,deltas,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,maxiters,bound_str,bound_fn):
-    tlambda_fname = dir_path + '/.cache/' + bound_str.lower() + '_' + str(npts) + '_' + str(num_calib) + '_tlambda_table.pkl'
+    bound_str = bound_str.lower()
+    tlambda_fname = dir_path + '/.cache/' + bound_str + '_' + str(npts) + '_' + str(num_calib) + '_tlambda_table.pkl'
     npts_sigma = max(int(npts/10),1)
 
     if bound_str == 'clt':

@@ -44,8 +44,8 @@ def get_heights(st, scores, labels, idx_dict, name_dict):
     heights = np.zeros((len(st),)) 
     starting_nodes = scores.argmax(dim=1)
     for i in range(len(st)):
-       st_leaf = idx_dict[starting_nodes[i].item()]
-       heights[i] = len(st_leaf.parents) - len(st[i].parents) 
+        st_leaf = idx_dict[starting_nodes[i].item()]
+        heights[i] = len(st_leaf.parents) - len(st[i].parents) 
     return heights
 
 def get_subtree(scores, lam, idx_dict, name_dict, memo):
@@ -62,8 +62,8 @@ def get_subtree(scores, lam, idx_dict, name_dict, memo):
             curr_sos = subtree_sum_scores(memo, i, name_dict[st[i].parents[min(parent_index,len(st[i].parents)-1)]], scores[i], name_dict) 
         st[i] = name_dict[st[i].parents[min(parent_index,len(st[i].parents)-1)]]
     return st
-
-def trial_precomputed(example_loss_table, example_height_table, lambdas_example_table, gamma, delta, num_lam, num_calib, batch_size, tlambda):
+    
+def trial_precomputed(example_loss_table, example_height_table, lambdas_example_table, gamma, delta, num_lam, num_calib, batch_size, tlambda, bound_str):
     total=example_loss_table.shape[0]
     perm = torch.randperm(example_loss_table.shape[0])
     example_loss_table = example_loss_table[perm]
@@ -71,7 +71,7 @@ def trial_precomputed(example_loss_table, example_height_table, lambdas_example_
     calib_losses, val_losses = (example_loss_table[0:num_calib], example_loss_table[num_calib:])
     calib_heights, val_heights = (example_height_table[0:num_calib], example_height_table[num_calib:])
 
-    lhat = get_lhat_from_table(calib_losses, lambdas_example_table, gamma, delta, tlambda)
+    lhat = get_lhat_from_table(calib_losses, lambdas_example_table, gamma, delta, tlambda, bound_str)
 
     losses = val_losses[:,np.argmax(lambdas_example_table == lhat)]
     heights = val_heights[:,np.argmax(lambdas_example_table == lhat)]
@@ -95,10 +95,10 @@ def plot_histograms(df_list,gamma,delta,bounds_to_plot):
         d = np.diff(np.unique(sizes)).min()
         lofb = sizes.min() - float(d)/2
         rolb = sizes.max() + float(d)/2
-        axs[1].hist(sizes, np.arange(lofb,rolb+d, d), label=bounds_to_plot[i], alpha=0.7, density=True)
+        axs[1].hist(sizes, np.arange(lofb,rolb+d, d), label='RCPS-' + bounds_to_plot[i], alpha=0.7, density=True)
     
     axs[0].set_xlabel('risk')
-    axs[0].locator_params(axis='x', nbins=5)
+    axs[0].locator_params(axis='x', nbins=8)
     axs[0].set_ylabel('density')
     axs[0].set_yticks([0,100])
     axs[0].axvline(x=gamma,c='#999999',linestyle='--',alpha=0.7)
@@ -107,8 +107,9 @@ def plot_histograms(df_list,gamma,delta,bounds_to_plot):
     sns.despine(ax=axs[0],top=True,right=True)
     sns.despine(ax=axs[1],top=True,right=True)
     axs[1].set_xlim([-0.5,rolb])
+    axs[1].legend()
     plt.tight_layout()
-    plt.savefig( (f'outputs/histograms/{gamma}_{delta}_{num_calib}_hierarchical_imagenet_histograms').replace('.','_') + '.pdf')
+    plt.savefig( (f'outputs/histograms/{gamma}_{delta}_{num_calib}_protein_histograms').replace('.','_') + '.pdf')
 
 def load_imagenet_tree():
     with open('./mobilenet.json', 'r') as file:
@@ -148,7 +149,13 @@ def experiment(losses,gamma,delta,lambdas_example_table,num_lam,num_calib,num_gr
     for bound_str in bounds_to_plot:
         if bound_str == 'Bentkus':
             bound_fn = bentkus_mu_plus
+        elif bound_str == 'CLT':
+            bound_fn = None 
+        elif bound_str == 'HB':
+            bound_fn = HB_mu_plus
         elif bound_str == 'HBB':
+            bound_fn = HBB_mu_plus
+        elif bound_str == 'WSR':
             bound_fn = HBB_mu_plus
         else:
             raise NotImplemented
@@ -175,7 +182,7 @@ def experiment(losses,gamma,delta,lambdas_example_table,num_lam,num_calib,num_gr
                 example_loss_table, example_height_table = get_example_loss_and_height_tables(scores, labels, idx_dict, name_dict, lambdas_example_table, num_calib)
 
                 for i in tqdm(range(num_trials)):
-                    risk, heights, lhat = trial_precomputed(example_loss_table, example_height_table, lambdas_example_table, gamma, delta, num_lam, num_calib, batch_size, tlambda)
+                    risk, heights, lhat = trial_precomputed(example_loss_table, example_height_table, lambdas_example_table, gamma, delta, num_lam, num_calib, batch_size, tlambda, bound_str)
                     df = df.append({"$\\hat{\\lambda}$": lhat,
                                     "risk": risk,
                                     "heights": heights,
@@ -212,7 +219,7 @@ if __name__ == "__main__":
     sns.set_style('white')
     fix_randomness(seed=0)
 
-    bounds_to_plot = ['HBB']
+    bounds_to_plot = ['CLT', 'HB', 'WSR']
 
     losses = torch.ones((1000,))
     gammas = [0.05]

@@ -80,7 +80,7 @@ def plot_histograms(df_list,gamma,delta,bounds_to_plot):
         d = np.diff(np.unique(sizes)).min()
         lofb = sizes.min() - float(d)/2
         rolb = sizes.max() + float(d)/2
-        axs[1].hist(sizes, np.arange(lofb,rolb+d, d), label=bounds_to_plot[i], alpha=0.7, density=True)
+        axs[1].hist(sizes, np.arange(lofb,rolb+d, d), label='RCPS-' + bounds_to_plot[i], alpha=0.7, density=True)
     
     axs[0].set_xlabel('risk')
     axs[0].locator_params(axis='x', nbins=5)
@@ -88,6 +88,7 @@ def plot_histograms(df_list,gamma,delta,bounds_to_plot):
     axs[0].set_yticks([0,100])
     axs[0].axvline(x=gamma,c='#999999',linestyle='--',alpha=0.7)
     axs[1].set_xlabel('size')
+    axs[1].legend()
     sns.despine(ax=axs[0],top=True,right=True)
     sns.despine(ax=axs[1],top=True,right=True)
     if 'Conformal' not in bounds_to_plot:
@@ -102,6 +103,8 @@ def experiment(losses,gamma,delta,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,lam
     for bound_str in bounds_to_plot:
         if bound_str == 'Bentkus':
             bound_fn = bentkus_mu_plus
+        elif bound_str == 'CLT':
+            bound_fn = None 
         elif bound_str == 'HB':
             bound_fn = HB_mu_plus
         elif bound_str == 'HBB':
@@ -175,7 +178,7 @@ if __name__ == "__main__":
     sns.set_style('white')
     fix_randomness(seed=0)
 
-    bounds_to_plot = ['WSR', 'HB']
+    bounds_to_plot = ['CLT','HB','WSR']
 
     losses = torch.rand((1000,))
     gammas = [0.1,0.05]

@@ -42,7 +42,7 @@ def get_example_loss_and_size_tables(regions, masks, lambdas_example_table, num_
 
     return loss_table, sizes_table
 
-def trial_precomputed(example_loss_table, example_size_table,  gamma, delta, num_calib, num_lam, deltas_precomputed, num_grid_hbb, ub, ub_sigma, lambdas_example_table, epsilon, maxiters, tlambda):
+def trial_precomputed(example_loss_table, example_size_table,  gamma, delta, num_calib, num_lam, deltas_precomputed, num_grid_hbb, ub, ub_sigma, lambdas_example_table, epsilon, maxiters, tlambda, bound_str):
     total=example_loss_table.shape[0]
     perm = torch.randperm(example_loss_table.shape[0])
     example_loss_table = example_loss_table[perm]
@@ -50,7 +50,7 @@ def trial_precomputed(example_loss_table, example_size_table,  gamma, delta, num
     calib_losses, val_losses = (example_loss_table[0:num_calib], example_loss_table[num_calib:])
     calib_sizes, val_sizes = (example_size_table[0:num_calib], example_size_table[num_calib:])
 
-    lhat_rcps = get_lhat_from_table(calib_losses, lambdas_example_table, gamma, delta, tlambda)
+    lhat_rcps = get_lhat_from_table(calib_losses, lambdas_example_table, gamma, delta, tlambda, bound_str)
 
     losses_rcps = val_losses[:,np.argmax(lambdas_example_table == lhat_rcps)]
     sizes_rcps = val_sizes[:,np.argmax(lambdas_example_table == lhat_rcps)]
@@ -63,7 +63,7 @@ def plot_histograms(dfs, gamma, delta, num_calib, output_dir):
         axs[0].hist(np.array(df['risk'].tolist()), alpha=0.7, density=True)
 
         normalized_size = np.concatenate(df['sizes'].tolist(),axis=0) 
-        axs[1].hist(normalized_size, alpha=0.7, label=df.bound[0].upper(), density=True)
+        axs[1].hist(normalized_size, alpha=0.7, label='RCPS-' + df.bound[0].upper(), density=True)
 
         axs[0].set_xlabel('risk')
         axs[0].locator_params(axis='x', nbins=5)
@@ -76,7 +76,7 @@ def plot_histograms(dfs, gamma, delta, num_calib, output_dir):
     sns.despine(top=True, right=True, ax=axs[0])
     sns.despine(top=True, right=True, ax=axs[1])
     plt.tight_layout()
-    plt.savefig( output_dir + (f'{gamma}_{delta}_{num_calib}_polyp_clt_hbb_histograms').replace('.','_') + '.pdf'  )
+    plt.savefig( output_dir + (f'{gamma}_{delta}_{num_calib}_polyp_clt_wsr_histograms').replace('.','_') + '.pdf'  )
 
 def experiment(gamma, delta, num_trials, num_calib, num_lam, output_dir, bound, deltas_precomputed, num_grid_hbb, ub, ub_sigma, epsilon, maxiters, lambdas_example_table):
     img_names, sigmoids, masks, regions, num_components = get_data(cache_path)
@@ -91,8 +91,12 @@ def experiment(gamma, delta, num_trials, num_calib, num_lam, output_dir, bound, 
         print('Performing experiments from scratch.')
         if bound == 'Bentkus':
             bound = bentkus_mu_plus
+        elif bound == 'HB':
+            bound_fn = HB_mu_plus
         elif bound == 'HBB':
             bound_fn = HBB_mu_plus
+        elif bound == 'WSR':
+            bound_fn = WSR_mu_plus
         elif bound == 'CLT':
             bound_fn = None 
         else:
@@ -103,7 +107,7 @@ def experiment(gamma, delta, num_trials, num_calib, num_lam, output_dir, bound, 
 
         local_df_list = []
         for i in tqdm(range(num_trials)):
-            lhat, risk, sizes = trial_precomputed(example_loss_table, example_sizes_table,  gamma, delta, num_calib, num_lam, deltas_precomputed, num_grid_hbb, ub, ub_sigma, lambdas_example_table, epsilon, maxiters, tlambda)
+            lhat, risk, sizes = trial_precomputed(example_loss_table, example_sizes_table,  gamma, delta, num_calib, num_lam, deltas_precomputed, num_grid_hbb, ub, ub_sigma, lambdas_example_table, epsilon, maxiters, tlambda, bound)
                 
             dict_local = {  "bound": bound, 
                             "$\\hat{\\lambda}$": lhat,
@@ -141,7 +145,7 @@ if __name__ == '__main__':
         maxiters = int(1e5)
         num_grid_hbb = 200
         deltas_precomputed = [0.001, 0.01, 0.05, 0.1]
-        bounds = ['CLT','HBB']
+        bounds = ['CLT','HB','WSR']
         lambdas_example_table = np.linspace(-1,0,1000)
 
         dfs = []

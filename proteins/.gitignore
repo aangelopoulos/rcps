@@ -1,0 +1,4 @@
+databases/
+fasta/
+.cache/
+alphafold_pytorch/

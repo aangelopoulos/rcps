@@ -46,15 +46,15 @@ def get_lamhat_precomputed(scores, labels, gamma, delta, num_lam, num_calib, tla
 
     return lam
 
-def get_conformal_baseline(calib_scores, calib_labels, val_scores, val_labels):
-    lowest_scores = np.zeros((calib_scores.shape[0],))
-    for i in range(calib_scores.shape[0]):
-        lowest_scores[i] = (calib_scores[i][calib_labels[i]==1]).min()
-    lamda = np.quantile(lowest_scores, gamma) 
-    est_labels = (val_scores > lamda).to(float)
-    prec, rec, size = get_metrics_precomputed(est_labels, val_labels)
-    all_correct = torch.relu(val_labels-est_labels).sum(dim=1) == 0
-    return prec.mean().item(), rec.mean().item(), size, lamda.item(), all_correct
+#def get_conformal_baseline(calib_scores, calib_labels, val_scores, val_labels):
+#    lowest_scores = np.zeros((calib_scores.shape[0],))
+#    for i in range(calib_scores.shape[0]):
+#        lowest_scores[i] = (calib_scores[i][calib_labels[i]==1]).min()
+#    lamda = np.quantile(lowest_scores, gamma) 
+#    est_labels = (val_scores > lamda).to(float)
+#    prec, rec, size = get_metrics_precomputed(est_labels, val_labels)
+#    all_correct = torch.relu(val_labels-est_labels).sum(dim=1) == 0
+#    return prec.mean().item(), rec.mean().item(), size, lamda.item(), all_correct
     
 def get_example_loss_and_size_tables(scores, labels, lambdas_example_table, num_calib):
     lam_len = len(lambdas_example_table)
@@ -70,16 +70,16 @@ def get_example_loss_and_size_tables(scores, labels, lambdas_example_table, num_
         sizes_table = np.zeros((scores.shape[0], lam_len))
         for j in range(lam_len):
             est_labels = scores > lambdas_example_table[j]
-            loss, _, size = get_metrics_precomputed(est_labels, labels)
+            loss, sizes = get_metrics_precomputed(est_labels, labels)
             loss_table[:,j] = loss 
-            sizes_table[:,j] = size 
+            sizes_table[:,j] = sizes
 
         np.save(fname_loss, loss_table)
         np.save(fname_sizes, sizes_table)
 
     return loss_table, sizes_table
 
-def trial_precomputed(example_loss_table, example_size_table, lambdas_example_table, gamma, delta, num_lam, num_calib, batch_size, tlambda):
+def trial_precomputed(example_loss_table, example_size_table, lambdas_example_table, gamma, delta, num_lam, num_calib, batch_size, tlambda, bound_str):
     total=example_loss_table.shape[0]
     perm = torch.randperm(example_loss_table.shape[0])
     example_loss_table = example_loss_table[perm]
@@ -87,11 +87,12 @@ def trial_precomputed(example_loss_table, example_size_table, lambdas_example_ta
     calib_losses, val_losses = (example_loss_table[0:num_calib], example_loss_table[num_calib:])
     calib_sizes, val_sizes = (example_size_table[0:num_calib], example_size_table[num_calib:])
 
-    lhat_rcps = get_lhat_from_table(calib_losses, lambdas_example_table, gamma, delta, tlambda)
+    lhat_rcps = get_lhat_from_table(calib_losses, lambdas_example_table, gamma, delta, tlambda, bound_str)
 
     losses_rcps = val_losses[:,np.argmax(lambdas_example_table == lhat_rcps)]
     sizes_rcps = val_sizes[:,np.argmax(lambdas_example_table == lhat_rcps)]
 
+    calib_losses[calib_losses > 0] = 1 # for the conformal baseline, use a 0-1 multiclass loss.
     lhat_conformal = get_lhat_conformal_from_table(calib_losses, lambdas_example_table, gamma)
 
     losses_conformal = val_losses[:,np.argmax(lambdas_example_table == lhat_conformal)]
@@ -105,27 +106,30 @@ def plot_histograms(df_list,gamma,delta,bounds_to_plot):
     minrecall = min([min(df['risk_rcps'].min(),df['risk_conformal'].min()) for df in df_list])
     maxrecall = max([max(df['risk_rcps'].max(),df['risk_conformal'].max()) for df in df_list])
 
-    recall_bins = np.arange(minrecall, maxrecall, 0.002) 
+    recall_bins = np.arange(minrecall, maxrecall, 0.005) 
     
+    sizes = torch.cat(df_list[0]['sizes_rcps'].tolist(),dim=0).numpy()
+    bl_sizes = torch.cat(df_list[0]['sizes_conformal'].tolist(),dim=0).numpy()
+    all_sizes = np.concatenate((sizes,bl_sizes),axis=0)
+    d = np.diff(np.unique(all_sizes)).min()
+    lofb = all_sizes.min() - float(d)/2
+    rolb = all_sizes.max() + float(d)/2
+
     for i in range(len(df_list)):
         df = df_list[i]
-        axs[0].hist(np.array(df['risk_rcps'].tolist()), recall_bins, alpha=0.7, density=True, label='RCPS')
-        axs[0].hist(np.array(df['risk_conformal'].tolist()), recall_bins, alpha=0.7, density=True, label='Conformal')
+        axs[0].hist(np.array(df['risk_rcps'].tolist()), recall_bins, alpha=0.7, density=True, label=bounds_to_plot[i])
 
         # Sizes will be 10 times as big as recall, since we pool it over runs.
         sizes = torch.cat(df['sizes_rcps'].tolist(),dim=0).numpy()
-        bl_sizes = torch.cat(df['sizes_conformal'].tolist(),dim=0).numpy()
-        all_sizes = np.concatenate((sizes,bl_sizes),axis=0)
-        d = np.diff(np.unique(all_sizes)).min()
-        lofb = all_sizes.min() - float(d)/2
-        rolb = all_sizes.max() + float(d)/2
-        axs[1].hist(sizes, np.arange(lofb,rolb+d, d), label='RCPS', alpha=0.7, density=True)
-        axs[1].hist(bl_sizes, np.arange(lofb,rolb+d, d), label='Conformal', alpha=0.7, density=True)
+        axs[1].hist(sizes, np.arange(lofb,rolb+d, d), label='RCPS-' + bounds_to_plot[i], alpha=0.7, density=True)
     
+    axs[0].hist(np.array(df_list[0]['risk_conformal'].tolist()), recall_bins, alpha=0.7, density=True, label='Conformal')
+    axs[1].hist(bl_sizes, np.arange(lofb,rolb+d, d), label='Conformal', alpha=0.7, density=True)
     axs[0].set_xlabel('risk')
     axs[0].locator_params(axis='x', nbins=4)
     axs[0].set_ylabel('density')
     axs[0].set_yticks([0,100])
+    axs[0].axvline(x=gamma,c='#999999',linestyle='--',alpha=0.7)
     axs[1].set_xlabel('size')
     sns.despine(ax=axs[0],top=True,right=True)
     sns.despine(ax=axs[1],top=True,right=True)
@@ -139,8 +143,14 @@ def experiment(gamma,delta,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,lambdas_ex
     for bound_str in bounds_to_plot:
         if bound_str == 'Bentkus':
             bound_fn = bentkus_mu_plus
+        elif bound_str == 'CLT':
+            bound_fn = None 
+        elif bound_str == 'HB':
+            bound_fn = HB_mu_plus
         elif bound_str == 'HBB':
             bound_fn = HBB_mu_plus
+        elif bound_str == 'WSR':
+            bound_fn = WSR_mu_plus
         else:
             raise NotImplemented
         fname = f'../.cache/{gamma}_{delta}_{bound_str}_dataframe.pkl'
@@ -179,7 +189,7 @@ def experiment(gamma,delta,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,lambdas_ex
             
             local_df_list = []
             for i in tqdm(range(num_trials)):
-                risk_rcps, sizes_rcps, lhat_rcps, risk_conformal, sizes_conformal, lhat_conformal = trial_precomputed(example_loss_table, example_size_table, lambdas_example_table, gamma, delta, num_lam, num_calib, batch_size, tlambda)
+                risk_rcps, sizes_rcps, lhat_rcps, risk_conformal, sizes_conformal, lhat_conformal = trial_precomputed(example_loss_table, example_size_table, lambdas_example_table, gamma, delta, num_lam, num_calib, batch_size, tlambda, bound_str)
                 dict_local = {"$\\hat{\\lambda}$": lhat_rcps,
                                 "risk_rcps": risk_rcps,
                                 "sizes_rcps": [sizes_rcps],
@@ -205,7 +215,7 @@ if __name__ == "__main__":
         fix_randomness(seed=0)
         args = parse_args(parser)
 
-        bounds_to_plot = ['HBB']
+        bounds_to_plot = ['CLT','HB','WSR']
 
         gammas = [0.1,0.05]
         deltas = [0.1,0.1]
@@ -215,7 +225,7 @@ if __name__ == "__main__":
         num_grid_hbb = 200
         epsilon = 1e-10 
         maxiters = int(1e5)
-        num_trials = 1000 # should be 1000
+        num_trials = 100 # should be 1000
         ub = 0.2
         ub_sigma = np.sqrt(2)
         lambdas_example_table = np.flip(np.linspace(0,1,1000), axis=0)
