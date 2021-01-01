@@ -70,15 +70,6 @@ def plot_histograms(df_list,gamma,delta,bounds_to_plot):
     plt.tight_layout()
     plt.savefig( (f'outputs/histograms/{gamma}_{delta}_{num_calib}_protein_histograms').replace('.','_') + '.pdf')
 
-def load_imagenet_tree():
-    with open('./mobilenet.json', 'r') as file:
-        data = file.read()
-    imagenet_dict = json.loads(data)
-    t = dict2tree(imagenet_dict)
-    idx_dict = getIndexDict(t)
-    name_dict = getNameDict(t)
-    return idx_dict, name_dict
-
 def get_example_loss_and_size_tables(ls_probs, ls_preds, ls_gt, ls_targets, ls_dists, lambdas_example_table, num_calib):
     lam_len = len(lambdas_example_table)
     lam_low = min(lambdas_example_table)
@@ -102,7 +93,7 @@ def get_example_loss_and_size_tables(ls_probs, ls_preds, ls_gt, ls_targets, ls_d
 
     return loss_table, size_table
 
-def experiment(losses,gamma,delta,lambdas_example_table,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,num_trials,maxiters,bounds_to_plot,batch_size=128):
+def experiment(gamma,delta,lambdas_example_table,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,num_trials,maxiters,bounds_to_plot,batch_size=128):
     df_list = []
     for bound_str in bounds_to_plot:
         if bound_str == 'Bentkus':
@@ -114,7 +105,7 @@ def experiment(losses,gamma,delta,lambdas_example_table,num_lam,num_calib,num_gr
         elif bound_str == 'HBB':
             bound_fn = HBB_mu_plus
         elif bound_str == 'WSR':
-            bound_fn = HBB_mu_plus
+            bound_fn = WSR_mu_plus
         else:
             raise NotImplemented
         fname = f'.cache/{gamma}_{delta}_{num_lam}_{num_calib}_{num_trials}_{bound_str}_hierarchical_dataframe.pkl'
@@ -152,7 +143,6 @@ if __name__ == "__main__":
 
     bounds_to_plot = ['CLT']
 
-    losses = torch.ones((1000,))
     gammas = [0.1]
     deltas = [0.1]
     params = list(zip(gammas,deltas))
@@ -170,4 +160,4 @@ if __name__ == "__main__":
     
     for gamma, delta in params:
         print(f"\n\n\n ============           NEW EXPERIMENT gamma={gamma} delta={delta}           ============ \n\n\n") 
-        experiment(losses,gamma,delta,lambdas_example_table,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,num_trials,maxiters,bounds_to_plot)
+        experiment(gamma,delta,lambdas_example_table,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,num_trials,maxiters,bounds_to_plot)

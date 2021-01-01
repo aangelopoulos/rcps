@@ -119,6 +119,21 @@ def test_table(Rhat,delta,bound_fn):
     r2 = (x2 <= Rhat).mean() * np.e / delta
     print(f"UCB fraction: {(ucb1-ucb2)/ucb2} | Table: {r1} | Direct: {r2}")
 
+def get_bound_fn_from_string(bound_str):
+    if bound_str == 'Bentkus':
+        bound_fn = bentkus_mu_plus
+    elif bound_str == 'CLT':
+        bound_fn = None 
+    elif bound_str == 'HB':
+        bound_fn = HB_mu_plus
+    elif bound_str == 'HBB':
+        bound_fn = HBB_mu_plus
+    elif bound_str == 'WSR':
+        bound_fn = WSR_mu_plus
+    else:
+        raise NotImplemented
+    return bound_fn
+
 if __name__ == "__main__":
     with torch.no_grad():
         bounds_to_plot = ['bentkus','hbb']

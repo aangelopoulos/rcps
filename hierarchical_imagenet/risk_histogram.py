@@ -156,7 +156,7 @@ def experiment(losses,gamma,delta,lambdas_example_table,num_lam,num_calib,num_gr
         elif bound_str == 'HBB':
             bound_fn = HBB_mu_plus
         elif bound_str == 'WSR':
-            bound_fn = HBB_mu_plus
+            bound_fn = WSR_mu_plus
         else:
             raise NotImplemented
         fname = f'.cache/{gamma}_{delta}_{num_lam}_{num_calib}_{num_trials}_{bound_str}_hierarchical_dataframe.pkl'
