@@ -100,9 +100,30 @@ def get_lhat_from_table(calib_loss_table, lambdas_table, gamma, delta, tlambda, 
         sigmahat = std_loss[i]
         t = tlambda(Rhat, sigmahat, delta) if bound_str not in ['WSR'] else tlambda(calib_loss_table[:,i], delta)
         if (Rhat > gamma) or (Rhat + t > gamma):
-            return lambdas_table[-i] #TODO: should this be -i + 1
+            return lambdas_table[-i+1] #TODO: i+2 ; one of the +1 comes from the overshoot of Rhat + t, and the other from 0-indexing. 
 
-    return lambdas_table[-i+1]
+    return lambdas_table[-1]
+
+def get_lhat_from_table_binarysearch(calib_loss_table, lambdas_table, gamma, delta, tlambda, bound_str):
+    calib_loss_table = calib_loss_table[:,::-1]
+    avg_loss = calib_loss_table.mean(axis=0)
+    std_loss = calib_loss_table.std(axis=0)
+
+    lb_idx = 1
+    ub_idx = len(lambdas_table)-1
+    i = 0 
+
+    while lb_idx != ub_idx-1:
+        i = (lb_idx + ub_idx)//2
+        Rhat = avg_loss[i]
+        sigmahat = std_loss[i]
+        t = tlambda(Rhat, sigmahat, delta) if bound_str not in ['WSR'] else tlambda(calib_loss_table[:,i], delta)
+        if (Rhat > gamma) or (Rhat + t > gamma):
+            ub_idx = i
+        else:
+            lb_idx = i
+
+    return lambdas_table[-i-1] #TODO: correct?
 
 def get_lhat_conformal_from_table(calib_loss_table, lambdas_table, alpha):
     avg_loss = calib_loss_table.mean(axis=0)

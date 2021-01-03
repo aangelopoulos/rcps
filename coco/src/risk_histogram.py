@@ -46,16 +46,6 @@ def get_lamhat_precomputed(scores, labels, gamma, delta, num_lam, num_calib, tla
 
     return lam
 
-#def get_conformal_baseline(calib_scores, calib_labels, val_scores, val_labels):
-#    lowest_scores = np.zeros((calib_scores.shape[0],))
-#    for i in range(calib_scores.shape[0]):
-#        lowest_scores[i] = (calib_scores[i][calib_labels[i]==1]).min()
-#    lamda = np.quantile(lowest_scores, gamma) 
-#    est_labels = (val_scores > lamda).to(float)
-#    prec, rec, size = get_metrics_precomputed(est_labels, val_labels)
-#    all_correct = torch.relu(val_labels-est_labels).sum(dim=1) == 0
-#    return prec.mean().item(), rec.mean().item(), size, lamda.item(), all_correct
-    
 def get_example_loss_and_size_tables(scores, labels, lambdas_example_table, num_calib):
     lam_len = len(lambdas_example_table)
     lam_low = min(lambdas_example_table)
@@ -68,7 +58,8 @@ def get_example_loss_and_size_tables(scores, labels, lambdas_example_table, num_
     except:
         loss_table = np.zeros((scores.shape[0], lam_len))
         sizes_table = np.zeros((scores.shape[0], lam_len))
-        for j in range(lam_len):
+        print("caching loss and size tables")
+        for j in tqdm(range(lam_len)):
             est_labels = scores > lambdas_example_table[j]
             loss, sizes = get_metrics_precomputed(est_labels, labels)
             loss_table[:,j] = loss 
@@ -80,14 +71,19 @@ def get_example_loss_and_size_tables(scores, labels, lambdas_example_table, num_
     return loss_table, sizes_table
 
 def trial_precomputed(example_loss_table, example_size_table, lambdas_example_table, gamma, delta, num_lam, num_calib, batch_size, tlambda, bound_str):
-    total=example_loss_table.shape[0]
-    perm = torch.randperm(example_loss_table.shape[0])
-    example_loss_table = example_loss_table[perm]
-    example_size_table = example_size_table[perm]
+    #total=example_loss_table.shape[0]
+    #perm = torch.randperm(example_loss_table.shape[0])
+    #example_loss_table = example_loss_table[perm]
+    #example_size_table = example_size_table[perm]
+    rng_state = np.random.get_state()
+    np.random.shuffle(example_loss_table)
+    np.random.set_state(rng_state)
+    np.random.shuffle(example_size_table)
+
     calib_losses, val_losses = (example_loss_table[0:num_calib], example_loss_table[num_calib:])
     calib_sizes, val_sizes = (example_size_table[0:num_calib], example_size_table[num_calib:])
 
-    lhat_rcps = get_lhat_from_table(calib_losses, lambdas_example_table, gamma, delta, tlambda, bound_str)
+    lhat_rcps = get_lhat_from_table_binarysearch(calib_losses, lambdas_example_table, gamma, delta, tlambda, bound_str)
 
     losses_rcps = val_losses[:,np.argmax(lambdas_example_table == lhat_rcps)]
     sizes_rcps = val_sizes[:,np.argmax(lambdas_example_table == lhat_rcps)]
@@ -117,6 +113,7 @@ def plot_histograms(df_list,gamma,delta,bounds_to_plot):
 
     for i in range(len(df_list)):
         df = df_list[i]
+        print(f"Bound {bounds_to_plot[i]} has coverage {1-(df['risk_rcps'] > gamma).mean()}")
         axs[0].hist(np.array(df['risk_rcps'].tolist()), recall_bins, alpha=0.7, density=True, label=bounds_to_plot[i])
 
         # Sizes will be 10 times as big as recall, since we pool it over runs.
@@ -153,7 +150,7 @@ def experiment(gamma,delta,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,lambdas_ex
             bound_fn = WSR_mu_plus
         else:
             raise NotImplemented
-        fname = f'../.cache/{gamma}_{delta}_{bound_str}_dataframe.pkl'
+        fname = f'../.cache/{gamma}_{delta}_{num_calib}_{bound_str}_{num_trials}_dataframe.pkl'
 
         df = pd.DataFrame(columns = ["$\\hat{\\lambda}$","risk_rcps","size_rcps","risk_conformal","size_conformal","gamma","delta"])
         try:
@@ -221,14 +218,14 @@ if __name__ == "__main__":
         deltas = [0.1,0.1]
         params = list(zip(gammas,deltas))
         num_lam = 1500 
-        num_calib = 4000 
+        num_calib = 2000 
         num_grid_hbb = 200
         epsilon = 1e-10 
         maxiters = int(1e5)
-        num_trials = 100 # should be 1000
+        num_trials = 1000 # should be 1000
         ub = 0.2
         ub_sigma = np.sqrt(2)
-        lambdas_example_table = np.flip(np.linspace(0,1,1000), axis=0)
+        lambdas_example_table = np.flip(np.linspace(0,1,10000), axis=0)
         
         deltas_precomputed = [0.001, 0.01, 0.05, 0.1]
         
