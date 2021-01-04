@@ -1,3 +1,3 @@
-<p align="center"><embed width=100% src="https://people.eecs.berkeley.edu/~angelopoulos/blog/posts/rcps/figs/rcps_main_small_onmouse.svg"></p>
+<p align="center"><embed width=100% src="./rcps_main_small.svg"></p>
 
 risk_control
