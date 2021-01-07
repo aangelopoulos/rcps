@@ -12,11 +12,11 @@
 </p>
 
 ## Paper 
-[Uncertainty Sets for Image Classifiers using Conformal Prediction](https://arxiv.org/abs/2009.14193)
+[Distribution-Free, Risk-Controlling Prediction Sets](https://arxiv.org/abs/2009.14193)
 ```
-@article{angelopoulos2020sets,
-  title={Uncertainty Sets for Image Classifiers using Conformal Prediction},
-  author={Angelopoulos, Anastasios N and Bates, Stephen and Malik, Jitendra and Jordan, Michael I},
+@article{bates-rcps,
+  title={Distribution-Free, Risk-Controlling Prediction Sets},
+  author={Bates, Stephen and Angelopoulos, Anastasios N and Lei, Lihua and Malik, Jitendra and Jordan, Michael I},
   journal={arXiv preprint arXiv:2009.14193},
   year={2020}
 }
@@ -24,5 +24,8 @@
 
 ## Basic Overview
 <p>
-  This is a basic overview.
+  This GitHub contains the code we used for the experiments in the RCPS paper.
+  Each experiment lives in a different, appropriately named folder.
+  The directory <code>core</code> contains code common to all of our experiments, including the implementations of concentration bounds and choice of lambda hat.
+  <b> The repository is still a work in progress</b>; we will be continually updating the code to make it more user-friendly and remove clutter from our development.
 </p>
