@@ -88,13 +88,15 @@ def trial_precomputed(example_loss_table, example_size_table, lambdas_example_ta
     losses_rcps = val_losses[:,np.argmax(lambdas_example_table == lhat_rcps)]
     sizes_rcps = val_sizes[:,np.argmax(lambdas_example_table == lhat_rcps)]
 
-    calib_losses[calib_losses > 0] = 1 # for the conformal baseline, use a 0-1 multiclass loss.
-    lhat_conformal = get_lhat_conformal_from_table(calib_losses, lambdas_example_table, gamma)
+    temp_calib_losses = calib_losses.copy()
+    temp_calib_losses[temp_calib_losses > 0] = 1 # for the conformal baseline, use a 0-1 multiclass loss.
+    lhat_conformal = get_lhat_conformal_from_table(temp_calib_losses, lambdas_example_table, gamma)
 
     losses_conformal = val_losses[:,np.argmax(lambdas_example_table == lhat_conformal)]
     sizes_conformal = val_sizes[:,np.argmax(lambdas_example_table == lhat_conformal)]
+    conformal_coverage = (losses_conformal > 0).astype(np.float64).mean()
     
-    return losses_rcps.mean(), torch.tensor(sizes_rcps), lhat_rcps, losses_conformal.mean(), torch.tensor(sizes_conformal), lhat_conformal
+    return losses_rcps.mean(), torch.tensor(sizes_rcps), lhat_rcps, losses_conformal.mean(), torch.tensor(sizes_conformal), lhat_conformal, conformal_coverage
 
 def plot_histograms(df_list,gamma,delta,bounds_to_plot):
     fig, axs = plt.subplots(nrows=1,ncols=2,figsize=(12,3))
@@ -106,6 +108,8 @@ def plot_histograms(df_list,gamma,delta,bounds_to_plot):
     
     sizes = torch.cat(df_list[0]['sizes_rcps'].tolist(),dim=0).numpy()
     bl_sizes = torch.cat(df_list[0]['sizes_conformal'].tolist(),dim=0).numpy()
+    conformal_coverages = df_list[0]['conformal_coverage'].to_numpy() 
+    print(f"Conformal coverage for baseline: {conformal_coverages.mean()}")
     all_sizes = np.concatenate((sizes,bl_sizes),axis=0)
     d = np.diff(np.unique(all_sizes)).min()
     lofb = all_sizes.min() - float(d)/2
@@ -186,13 +190,14 @@ def experiment(gamma,delta,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,lambdas_ex
             
             local_df_list = []
             for i in tqdm(range(num_trials)):
-                risk_rcps, sizes_rcps, lhat_rcps, risk_conformal, sizes_conformal, lhat_conformal = trial_precomputed(example_loss_table, example_size_table, lambdas_example_table, gamma, delta, num_lam, num_calib, batch_size, tlambda, bound_str)
+                risk_rcps, sizes_rcps, lhat_rcps, risk_conformal, sizes_conformal, lhat_conformal, conformal_coverage = trial_precomputed(example_loss_table, example_size_table, lambdas_example_table, gamma, delta, num_lam, num_calib, batch_size, tlambda, bound_str)
                 dict_local = {"$\\hat{\\lambda}$": lhat_rcps,
                                 "risk_rcps": risk_rcps,
                                 "sizes_rcps": [sizes_rcps],
                                 "$\\hat{\\lambda}_{c}$": lhat_conformal,
                                 "risk_conformal": risk_conformal,
                                 "sizes_conformal": [sizes_conformal],
+                                "conformal_coverage": conformal_coverage,
                                 "gamma": gamma,
                                 "delta": delta
                              }
