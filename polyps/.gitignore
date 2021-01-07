@@ -3,5 +3,4 @@ all_data/
 data/
 results/
 outputs/
-*.pth
 .cache/
