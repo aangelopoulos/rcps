@@ -24,6 +24,7 @@
 
 ## Basic Overview
 <p>
+  For general information about RCPS, you can check <a href="https://people.eecs.berkeley.edu/%7Eangelopoulos/blog/posts/rcps/">our blog post</a>.
   This GitHub contains the code we used for the experiments in the RCPS paper.
   Each experiment lives in a different, appropriately named folder.
   The directory <code>core</code> contains code common to all of our experiments, including the implementations of concentration bounds and choice of lambda hat.
@@ -39,4 +40,9 @@
 ```
 conda create --name rcps --file ./requirements.txt 
 ```
+<p>
+   
+</p>
 
+## License
+<a href="https://opensource.org/licenses/MIT" alt="License">MIT License</a>
