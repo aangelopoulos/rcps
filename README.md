@@ -52,7 +52,7 @@ conda create --name rcps --file ./requirements.txt
 
 ### Polyp data
 <p>
-  We used data from five different datasets: <a href="https://datasets.simula.no/hyper-kvasir/">HyperKvasir</a>, <a href="https://polyp.grand-challenge.org/CVCClinicDB/">CVC-ClinicDB</a>, <a href="https://datasets.simula.no/kvasir/">Kvasir</a>, <a href="http://www.cvc.uab.es/CVC-Colon/index.php/databases/">CVC-ColonDB</a>, and <a href="https://polyp.grand-challenge.org/EtisLarib/">ETIS-LaribPolypDB</a>. 
+  We used data from five different datasets: <a href="https://datasets.simula.no/hyper-kvasir/">HyperKvasir-SEG</a>, <a href="https://polyp.grand-challenge.org/CVCClinicDB/">CVC-ClinicDB</a>, <a href="https://datasets.simula.no/kvasir/">Kvasir-SEG</a>, <a href="http://www.cvc.uab.es/CVC-Colon/index.php/databases/">CVC-ColonDB</a>, and <a href="https://polyp.grand-challenge.org/EtisLarib/">ETIS-LaribPolypDB</a>. 
   Download each of these datasets and unzip them into the folder <code>./polyps/PraNet/data/TestDataset/{datasetname}</code>.
   Then run the script <code>./polyps/PraNet/process_all_data.py</code>, which should store the outputs of the tumor prediction model in the proper directory so you can run our experiments.
 </p>
