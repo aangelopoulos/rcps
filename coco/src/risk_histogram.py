@@ -139,7 +139,7 @@ def plot_histograms(df_list,gamma,delta,bounds_to_plot):
     plt.savefig('../' + (f'outputs/histograms/{gamma}_{delta}_coco_histograms').replace('.','_') + '.pdf')
 
 
-def experiment(gamma,delta,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,lambdas_example_table,epsilon,num_trials,maxiters,batch_size,bounds_to_plot):
+def experiment(gamma,delta,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,lambdas_example_table,epsilon,num_trials,maxiters,batch_size,bounds_to_plot, coco_val_2017_directory, coco_instances_val_2017_json):
     df_list = []
     for bound_str in bounds_to_plot:
         if bound_str == 'Bentkus':
@@ -160,7 +160,7 @@ def experiment(gamma,delta,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,lambdas_ex
         try:
             df = pd.read_pickle(fname)
         except FileNotFoundError:
-            dataset = tv.datasets.CocoDetection('../data/val2017','../data/annotations_trainval2017/instances_val2017.json',transform=tv.transforms.Compose([tv.transforms.Resize((args.input_size, args.input_size)),
+            dataset = tv.datasets.CocoDetection(coco_val_2017_directory,,transform=tv.transforms.Compose([tv.transforms.Resize((args.input_size, args.input_size)),
                                                                                                                                                              tv.transforms.ToTensor()]))
             print('Dataset loaded')
             
@@ -216,6 +216,8 @@ if __name__ == "__main__":
         sns.set_style('white')
         fix_randomness(seed=0)
         args = parse_args(parser)
+        coco_val_2017_directory = '../data/val2017'
+        coco_instances_val_2017_json = '../data/annotations_trainval2017/instances_val2017.json'
 
         bounds_to_plot = ['CLT','HB','WSR']
 
@@ -236,4 +238,4 @@ if __name__ == "__main__":
         
         for gamma, delta in params:
             print(f"\n\n\n ============           NEW EXPERIMENT gamma={gamma} delta={delta}           ============ \n\n\n") 
-            experiment(gamma,delta,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,lambdas_example_table,epsilon,num_trials,maxiters,args.batch_size,bounds_to_plot)
+            experiment(gamma,delta,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,lambdas_example_table,epsilon,num_trials,maxiters,args.batch_size,bounds_to_plot,coco_val_2017_directory,coco_instances_val_2017_json)
