@@ -1,3 +1,2 @@
-<p align="center"><img width=100% src="./ucb_onload.svg"></p>
+<p align="center"><img width=100% src="./media/ucb_onload.svg"></p>
 
-risk_control
