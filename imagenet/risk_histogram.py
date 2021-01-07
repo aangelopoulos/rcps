@@ -15,7 +15,6 @@ from tqdm import tqdm
 from utils import *
 import seaborn as sns
 from core.concentration import *
-from conformal import platt_logits, ConformalModelScores
 import pdb
 
 def weighted_loss(est_labels_onehot, labels_onehot, losses):
@@ -98,7 +97,7 @@ def plot_histograms(df_list,gamma,delta,bounds_to_plot):
     plt.tight_layout()
     plt.savefig( (f'outputs/histograms/{gamma}_{delta}_{num_calib}_imagenet_histograms').replace('.','_') + '.pdf')
 
-def experiment(losses,gamma,delta,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,lambdas_example_table,epsilon,num_trials,maxiters,bounds_to_plot, batch_size=128):
+def experiment(losses,gamma,delta,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,lambdas_example_table,epsilon,num_trials,maxiters,bounds_to_plot, batch_size=128, imagenet_val_dir):
     df_list = []
     for bound_str in bounds_to_plot:
         if bound_str == 'Bentkus':
@@ -121,7 +120,7 @@ def experiment(losses,gamma,delta,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,lam
         try:
             df = pd.read_pickle(fname)
         except FileNotFoundError:
-            dataset_precomputed = get_logits_dataset('ResNet152', 'Imagenet', '/scratch/group/ilsvrc/val/')
+            dataset_precomputed = get_logits_dataset('ResNet152', 'Imagenet', imagenet_val_dir)
             print('Dataset loaded')
             
             classes_array = get_imagenet_classes()
@@ -179,6 +178,7 @@ if __name__ == "__main__":
     fix_randomness(seed=0)
 
     bounds_to_plot = ['CLT','HB','WSR']
+    imagenet_val_dir = '/scratch/group/ilsvrc/val' #TODO: Replace this with YOUR location of imagenet val set.
 
     losses = torch.rand((1000,))
     gammas = [0.1,0.05]
@@ -198,4 +198,4 @@ if __name__ == "__main__":
     
     for gamma, delta in params:
         print(f"\n\n\n ============           NEW EXPERIMENT gamma={gamma} delta={delta}           ============ \n\n\n") 
-        experiment(losses,gamma,delta,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,lambdas_example_table,epsilon,num_trials,maxiters,bounds_to_plot)
+        experiment(losses,gamma,delta,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,lambdas_example_table,epsilon,num_trials,maxiters,bounds_to_plot,imagenet_val_dir)
