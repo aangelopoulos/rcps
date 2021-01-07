@@ -34,15 +34,32 @@
 
 ## Getting Started 
 <p>
-  You can create the <code>rcps</code> conda environment by running the following line: 
+  We store some large files in our git repo via <code>git-lfs</code>; you may need to install and configure it from <a href="https://git-lfs.github.com/">here</a>.  
+  After installing <code>git-lfs</code>, you can clone this repository. 
+  Then, you can create the <code>rcps</code> conda environment by running the following line: 
 </p>
 
 ```
 conda create --name rcps --file ./requirements.txt 
 ```
+
 <p>
-   
+  Each experiment requires different datasets. 
+  For the <code>./imagenet</code> and <code>./hierarchical_imagenet</code> experiments, you will need to point the scripts towards the val directory of your local copy of the Imagenet dataset.
+  Similarly, for <code>./coco</code>, you need to point the scripts towards your local copy of the 2017 version of MS COCO, available <a href="https://cocodataset.org/#download">here</a>.
+  For the <code>./polyp</code> and <code>./protein</code> examples, a bit more work must be done.
 </p>
 
+### Polyp data
+<p>
+  We used data from six different datasets: <a href="https://datasets.simula.no/hyper-kvasir/">HyperKvasir</a>, <a href="">CVC-300</a>, <a href="https://polyp.grand-challenge.org/CVCClinicDB/">CVC-ClinicDB</a>, <a href="https://datasets.simula.no/kvasir/">Kvasir</a>, <a href="http://www.cvc.uab.es/CVC-Colon/index.php/databases/">CVC-ColonDB</a>, and <a href="https://polyp.grand-challenge.org/EtisLarib/">ETIS-LaribPolypDB</a>. 
+  Download each of these datasets and unzip them into the folder <code>./polyps/PraNet/data/TestDataset/{datasetname}</code>.
+  Then run the script <code>./polyps/PraNet/process_all_data.py</code>, which should store the outputs of the tumor prediction model in the proper directory so you can run our experiments.
+</p>
+
+### Protein data 
+<p>
+  For the AlphaFoldv1 experiments in <code>./proteins</code>, you can point the scripts to the alphafold CASP-13 test set, available <a href="http://bit.ly/alphafold-casp13-data">here</a>. 
+</p>
 ## License
 <a href="https://opensource.org/licenses/MIT" alt="License">MIT License</a>

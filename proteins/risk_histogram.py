@@ -86,14 +86,14 @@ def get_example_loss_and_size_tables(ls_probs, ls_preds, ls_gt, ls_targets, ls_d
         for j in tqdm(range(lam_len)):
             ls_sets = ls_sets_from_probs(ls_probs, ls_preds, ls_dists, lambdas_example_table[j]) 
             loss_table[:,j] = arr_l2_loss(ls_sets, ls_gt) 
-            size_table[:,j] = np.array([np.random.choice((s[1]-s[0]).flatten()) for s in ls_sets]) # TODO: store all of them? a larger subset? 
+            size_table[:,j] = np.array([np.random.choice((s[1]-s[0]).flatten()) for s in ls_sets]) # TODO:I randomly sample here, but that's only one possible choice. 
 
         np.save(fname_loss, loss_table)
         np.save(fname_size, size_table)
 
     return loss_table, size_table
 
-def experiment(gamma,delta,lambdas_example_table,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,num_trials,maxiters,bounds_to_plot,batch_size=128):
+def experiment(gamma,delta,lambdas_example_table,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,num_trials,maxiters,bounds_to_plot,batch_size=128,casp13_alphafoldv1_data_dir):
     df_list = []
     for bound_str in bounds_to_plot:
         if bound_str == 'Bentkus':
@@ -109,14 +109,13 @@ def experiment(gamma,delta,lambdas_example_table,num_lam,num_calib,num_grid_hbb,
         else:
             raise NotImplemented
         fname = f'.cache/{gamma}_{delta}_{num_lam}_{num_calib}_{num_trials}_{bound_str}_hierarchical_dataframe.pkl'
-        data_dir = '/scratch/aa/casp13-data/'
 
         df = pd.DataFrame(columns = ["$\\hat{\\lambda}$","risk","sizes","gamma","delta"])
         try:
             df = pd.read_pickle(fname)
         except FileNotFoundError:
             
-            ls_probs, ls_preds, ls_gt, ls_targets, ls_dists = get_preds_gt(data_dir)
+            ls_probs, ls_preds, ls_gt, ls_targets, ls_dists = get_preds_gt(casp13_alphafoldv1_data_dir)
 
             with torch.no_grad():
                 # get the precomputed binary search
@@ -142,7 +141,8 @@ if __name__ == "__main__":
     fix_randomness(seed=0)
 
     bounds_to_plot = ['CLT']
-
+    casp13_alphafoldv1_data_dir = '/scratch/aa/casp13-data/'
+        
     gammas = [0.1]
     deltas = [0.1]
     params = list(zip(gammas,deltas))
@@ -160,4 +160,4 @@ if __name__ == "__main__":
     
     for gamma, delta in params:
         print(f"\n\n\n ============           NEW EXPERIMENT gamma={gamma} delta={delta}           ============ \n\n\n") 
-        experiment(gamma,delta,lambdas_example_table,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,num_trials,maxiters,bounds_to_plot)
+        experiment(gamma,delta,lambdas_example_table,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,num_trials,maxiters,bounds_to_plot,casp13_alphafoldv1_data_dir)
