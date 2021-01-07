@@ -39,5 +39,3 @@ for _data_name in ['HyperKvasir', 'CVC-300', 'CVC-ClinicDB', 'Kvasir', 'CVC-Colo
         res = (res - res.min()) / (res.max() - res.min() + 1e-8)
         # Save the image as a float numpy array, since otherwise it will be quantized to 256 levels.
         np.save(save_path+name,res)
-        #io.imwrite(save_path+name, res)
-        #misc.imsave(save_path+name, res)
