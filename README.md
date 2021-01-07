@@ -28,4 +28,15 @@
   Each experiment lives in a different, appropriately named folder.
   The directory <code>core</code> contains code common to all of our experiments, including the implementations of concentration bounds and choice of lambda hat.
   <b> The repository is still a work in progress</b>; we will be continually updating the code to make it more user-friendly and remove clutter from our development.
+  If you have trouble reproducing our results, please email <code>angelopoulos@berkeley.edu</code>.
 </p>
+
+## Getting Started 
+<p>
+  You can create the <code>rcps</code> conda environment by running the following line: 
+</p>
+
+```
+conda create --name rcps --file ./requirements.txt 
+```
+
