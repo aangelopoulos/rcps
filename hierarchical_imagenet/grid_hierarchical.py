@@ -110,6 +110,7 @@ def generate_plot(lambdas_example_table,gamma,delta,num_lam,num_calib,num_grid_h
             hier_to_plot = []
             true_strings_to_plot = []
             k = 0
+            # Places where ResNet18 is wrong are fairly rare, so we need to find them.
             for i in range(len(top1_strings)):
                 if correct[i] and not top1_correct[i] and k < num_plot:
                     print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')

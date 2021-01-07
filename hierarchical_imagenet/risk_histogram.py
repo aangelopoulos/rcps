@@ -112,7 +112,7 @@ def plot_histograms(df_list,gamma,delta,bounds_to_plot):
     plt.savefig( (f'outputs/histograms/{gamma}_{delta}_{num_calib}_protein_histograms').replace('.','_') + '.pdf')
 
 def load_imagenet_tree():
-    with open('./mobilenet.json', 'r') as file:
+    with open('./wordnet_hierarchy.json', 'r') as file:
         data = file.read()
     imagenet_dict = json.loads(data)
     t = dict2tree(imagenet_dict)
@@ -144,7 +144,7 @@ def get_example_loss_and_height_tables(scores, labels, idx_dict, name_dict, lamb
 
     return loss_table, height_table
 
-def experiment(losses,gamma,delta,lambdas_example_table,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,num_trials,maxiters,bounds_to_plot,batch_size=128):
+def experiment(losses,gamma,delta,lambdas_example_table,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,num_trials,maxiters,bounds_to_plot,batch_size=128,imagenet_val_dir):
     df_list = []
     for bound_str in bounds_to_plot:
         if bound_str == 'Bentkus':
@@ -165,7 +165,7 @@ def experiment(losses,gamma,delta,lambdas_example_table,num_lam,num_calib,num_gr
         try:
             df = pd.read_pickle(fname)
         except FileNotFoundError:
-            dataset_precomputed = get_logits_dataset('ResNet152', 'Imagenet', '/scratch/group/ilsvrc/val/')
+            dataset_precomputed = get_logits_dataset('ResNet152', 'Imagenet', imagenet_val_dir)
             print('Dataset loaded')
             
             classes_array = get_imagenet_classes()
@@ -218,6 +218,7 @@ if __name__ == "__main__":
     sns.set(palette='pastel',font='serif')
     sns.set_style('white')
     fix_randomness(seed=0)
+    imagenet_val_dir = '/scratch/group/ilsvrc/val/'
 
     bounds_to_plot = ['CLT', 'HB', 'WSR']
 
@@ -239,4 +240,4 @@ if __name__ == "__main__":
     
     for gamma, delta in params:
         print(f"\n\n\n ============           NEW EXPERIMENT gamma={gamma} delta={delta}           ============ \n\n\n") 
-        experiment(losses,gamma,delta,lambdas_example_table,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,num_trials,maxiters,bounds_to_plot)
+        experiment(losses,gamma,delta,lambdas_example_table,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,num_trials,maxiters,bounds_to_plot,imagenet_val_dir)

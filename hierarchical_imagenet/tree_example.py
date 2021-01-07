@@ -18,6 +18,8 @@ if __name__ == "__main__":
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     random.seed(seed)
+    # TODO: Replace with your directory
+    imagenet_val_dir = '/scratch/group/ilsvrc/val/'
 
     # Transform as in https://github.com/pytorch/examples/blob/42e5b996718797e45c46a25c55b031e6768f8440/imagenet/main.py#L92 
     transform = transforms.Compose([
@@ -31,13 +33,13 @@ if __name__ == "__main__":
     num_calib = 20000
     batch_size = 32
     # Get the conformal calibration dataset
-    imagenet_calib_data, imagenet_val_data = torch.utils.data.random_split(torchvision.datasets.ImageFolder('/scratch/group/ilsvrc/val/', transform), [num_calib,50000-num_calib])
+    imagenet_calib_data, imagenet_val_data = torch.utils.data.random_split(torchvision.datasets.ImageFolder(imagenet_val_dir, transform), [num_calib,50000-num_calib])
 
     # Initialize loaders 
     calib_loader = torch.utils.data.DataLoader(imagenet_calib_data, batch_size=batch_size, shuffle=True, pin_memory=True)
     val_loader = torch.utils.data.DataLoader(imagenet_val_data, batch_size=batch_size, shuffle=True, pin_memory=True)
 
-    with open('./mobilenet.json', 'r') as file:
+    with open('./wordnet_hierarchy.json', 'r') as file:
         data = file.read()
 
     imagenet_dict = json.loads(data)
