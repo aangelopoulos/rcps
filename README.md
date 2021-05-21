@@ -1,9 +1,9 @@
-<p align="center"><img width=100% src="./media/rcps_title.svg"></p>
+<p align="center"><img width=90% src="./media/rcps_title.svg"></p>
 <p align="center"><img width=100% src="./media/ucb_onload.svg"></p>
 
 
 <p align="center">
-    <a style="text-decoration:none !important;" href="https://arxiv.org/abs/2009.14193" alt="arXiv"> <img src="https://img.shields.io/badge/paper-arXiv-red" /> </a>
+    <a style="text-decoration:none !important;" href="http://arxiv.org/abs/2101.02703" alt="arXiv"> <img src="https://img.shields.io/badge/paper-arXiv-red" /> </a>
     <a style="text-decoration:none !important;" href="https://people.eecs.berkeley.edu/%7Eangelopoulos/blog/posts/rcps/" alt="website"> <img src="https://img.shields.io/badge/website-Berkeley-yellow" /> </a>
     <a style="text-decoration:none !important;" href="https://docs.conda.io/en/latest/miniconda.html" alt="package management"> <img src="https://img.shields.io/badge/conda-env-green" /> </a>
     <a style="text-decoration:none !important;" href="https://opensource.org/licenses/MIT" alt="License"> <img src="https://img.shields.io/badge/license-MIT-blue.svg" /> </a>
@@ -12,12 +12,12 @@
 </p>
 
 ## Paper 
-[Distribution-Free, Risk-Controlling Prediction Sets](https://arxiv.org/abs/2009.14193)
+[Distribution-Free, Risk-Controlling Prediction Sets](http://arxiv.org/abs/2101.02703)
 ```
 @article{bates-rcps,
   title={Distribution-Free, Risk-Controlling Prediction Sets},
   author={Bates, Stephen and Angelopoulos, Anastasios N and Lei, Lihua and Malik, Jitendra and Jordan, Michael I},
-  journal={arXiv preprint arXiv:2009.14193},
+  journal={arXiv preprint arXiv:2101.02703},
   year={2020}
 }
 ```
@@ -52,7 +52,7 @@ conda create --name rcps --file ./requirements.txt
 
 ### Polyp data
 <p>
-  We used data from six different datasets: <a href="https://datasets.simula.no/hyper-kvasir/">HyperKvasir</a>, <a href="">CVC-300</a>, <a href="https://polyp.grand-challenge.org/CVCClinicDB/">CVC-ClinicDB</a>, <a href="https://datasets.simula.no/kvasir/">Kvasir</a>, <a href="http://www.cvc.uab.es/CVC-Colon/index.php/databases/">CVC-ColonDB</a>, and <a href="https://polyp.grand-challenge.org/EtisLarib/">ETIS-LaribPolypDB</a>. 
+  We used data from five different datasets: <a href="https://datasets.simula.no/hyper-kvasir/">HyperKvasir-SEG</a>, <a href="https://polyp.grand-challenge.org/CVCClinicDB/">CVC-ClinicDB</a>, <a href="https://datasets.simula.no/kvasir/">Kvasir-SEG</a>, <a href="http://www.cvc.uab.es/CVC-Colon/index.php/databases/">CVC-ColonDB</a>, and <a href="https://polyp.grand-challenge.org/EtisLarib/">ETIS-LaribPolypDB</a>. 
   Download each of these datasets and unzip them into the folder <code>./polyps/PraNet/data/TestDataset/{datasetname}</code>.
   Then run the script <code>./polyps/PraNet/process_all_data.py</code>, which should store the outputs of the tumor prediction model in the proper directory so you can run our experiments.
 </p>
