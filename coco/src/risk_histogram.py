@@ -160,7 +160,7 @@ def experiment(gamma,delta,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,lambdas_ex
         try:
             df = pd.read_pickle(fname)
         except FileNotFoundError:
-            dataset = tv.datasets.CocoDetection(coco_val_2017_directory,,transform=tv.transforms.Compose([tv.transforms.Resize((args.input_size, args.input_size)),
+            dataset = tv.datasets.CocoDetection(coco_val_2017_directory,transform=tv.transforms.Compose([tv.transforms.Resize((args.input_size, args.input_size)),
                                                                                                                                                              tv.transforms.ToTensor()]))
             print('Dataset loaded')
             
