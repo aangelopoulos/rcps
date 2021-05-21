@@ -17,9 +17,6 @@ import seaborn as sns
 from core.concentration import *
 import pdb
 
-def weighted_loss(est_labels_onehot, labels_onehot, losses):
-    return (losses.view(1,-1) * torch.nn.functional.relu(labels_onehot - est_labels_onehot)).sum(dim=1)
-
 def get_example_loss_and_size_tables(scores, labels, losses, lambdas_example_table, num_calib):
     lam_len = len(lambdas_example_table)
     lam_low = min(lambdas_example_table)

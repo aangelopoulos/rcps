@@ -58,25 +58,18 @@ def trial_precomputed(example_loss_table, example_size_table,  gamma, delta, num
     return lhat_rcps, losses_rcps.mean(), sizes_rcps
 
 def plot_histograms(dfs, gamma, delta, num_calib, output_dir):
-    fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(12,3))
+    fig = plt.figure(figsize=(6,3))
+    ax = plt.axes()
     for df in dfs:
-        axs[0].hist(np.array(df['risk'].tolist()), alpha=0.7, density=True)
+        plt.hist(np.array(df['risk'].tolist()), alpha=0.7, density=True)
 
-        normalized_size = np.concatenate(df['sizes'].tolist(),axis=0) 
-        axs[1].hist(normalized_size, alpha=0.7, label='RCPS-' + df.bound[0].upper(), density=True)
-
-        axs[0].set_xlabel('risk')
-        axs[0].locator_params(axis='x', nbins=5)
-        axs[0].axvline(x=gamma,c='#999999',linestyle='--',alpha=0.7)
-        axs[0].set_ylabel('density')
-        axs[1].set_xlabel('set size as a fraction of polyp size')
-        axs[1].locator_params(axis='x', nbins=10)
-        axs[1].set_yscale('log')
-        axs[1].legend()
-    sns.despine(top=True, right=True, ax=axs[0])
-    sns.despine(top=True, right=True, ax=axs[1])
+        plt.xlabel('risk')
+        ax.locator_params(axis='x', nbins=5)
+        ax.axvline(x=gamma,c='#999999',linestyle='--',alpha=0.7)
+        plt.ylabel('density')
+    sns.despine(top=True, right=True, ax=ax)
     plt.tight_layout()
-    plt.savefig( output_dir + (f'{gamma}_{delta}_{num_calib}_polyp_clt_wsr_histograms').replace('.','_') + '.pdf'  )
+    plt.savefig( output_dir + (f'simplified_{gamma}_{delta}_{num_calib}_polyp_clt_wsr_histograms').replace('.','_') + '.pdf'  )
 
 def experiment(gamma, delta, num_trials, num_calib, num_lam, output_dir, bound, deltas_precomputed, num_grid_hbb, ub, ub_sigma, epsilon, maxiters, lambdas_example_table):
     img_names, sigmoids, masks, regions, num_components = get_data(cache_path)
@@ -145,7 +138,7 @@ if __name__ == '__main__':
         maxiters = int(1e5)
         num_grid_hbb = 200
         deltas_precomputed = [0.001, 0.01, 0.05, 0.1]
-        bounds = ['CLT','HBB','WSR']
+        bounds = ['WSR']
         lambdas_example_table = np.linspace(-1,0,1000)
 
         dfs = []

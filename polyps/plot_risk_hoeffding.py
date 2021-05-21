@@ -81,47 +81,35 @@ def plot_histograms(dfs, gamma, delta, num_calib, output_dir):
 def experiment(gamma, delta, num_trials, num_calib, num_lam, output_dir, bound, deltas_precomputed, num_grid_hbb, ub, ub_sigma, epsilon, maxiters, lambdas_example_table):
     img_names, sigmoids, masks, regions, num_components = get_data(cache_path)
     masks[masks > 1] = 1
-    fname = cache_path + f'{gamma}_{delta}_{num_calib}_{num_lam}_{bound}_dataframe'.replace('.','_') + '.pkl'
+    plot_name = './outputs/example_risk_plot.pdf'
 
     df = pd.DataFrame(columns=['bound','$\\hat{\\lambda}$','risk','sizes','gamma','delta'])
-    try:
-        print('Dataframe loaded')
-        df = pd.read_pickle(fname)
-    except:
-        print('Performing experiments from scratch.')
-        if bound == 'Bentkus':
-            bound = bentkus_mu_plus
-        elif bound == 'HB':
-            bound_fn = HB_mu_plus
-        elif bound == 'HBB':
-            bound_fn = HBB_mu_plus
-        elif bound == 'WSR':
-            bound_fn = WSR_mu_plus
-        elif bound == 'CLT':
-            bound_fn = None 
-        else:
-            raise NotImplemented
+    if bound == 'Bentkus':
+        bound = bentkus_mu_plus
+    elif bound == 'HB':
+        bound_fn = HB_mu_plus
+    elif bound == 'HBB':
+        bound_fn = HBB_mu_plus
+    elif bound == 'WSR':
+        bound_fn = WSR_mu_plus
+    elif bound == 'CLT':
+        bound_fn = None 
+    else:
+        raise NotImplemented
 
-        tlambda = get_tlambda(num_lam,deltas_precomputed,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,maxiters,bound.lower(),bound_fn)
-        example_loss_table, example_sizes_table = get_example_loss_and_size_tables(regions, masks, lambdas_example_table, num_calib)
+    tlambda = get_tlambda(num_lam,deltas_precomputed,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,maxiters,bound.lower(),bound_fn)
+    example_loss_table, example_sizes_table = get_example_loss_and_size_tables(regions, masks, lambdas_example_table, num_calib)
+    risk_curve = example_loss_table.mean(axis=0)
+    r_plus_curve = risk_curve + np.sqrt(np.log(1/delta)/num_calib)#np.array([tlambda(rhat,0,delta) for rhat in risk_curve])
+    plt.plot(lambdas_example_table, risk_curve, label=r'$\hat{R}$', linewidth=2)
+    plt.plot(lambdas_example_table, r_plus_curve, label=r'$\hat{R}^+$', linewidth=2)
+    plt.axhline(y=gamma,linestyle='--',linewidth=2,color='darkgray')
+    plt.legend()
+    plt.xlabel(r'$\lambda$')
+    plt.ylabel('risk')
+    sns.despine(top=True,right=True)
+    plt.savefig(plot_name)
 
-        local_df_list = []
-        for i in tqdm(range(num_trials)):
-            lhat, risk, sizes = trial_precomputed(example_loss_table, example_sizes_table,  gamma, delta, num_calib, num_lam, deltas_precomputed, num_grid_hbb, ub, ub_sigma, lambdas_example_table, epsilon, maxiters, tlambda, bound)
-                
-            dict_local = {  "bound": bound, 
-                            "$\\hat{\\lambda}$": lhat,
-                            "risk": risk,
-                            "sizes": [sizes],
-                            "gamma": gamma,
-                            "delta": delta
-                         }
-            df_local = pd.DataFrame(dict_local)
-            local_df_list = local_df_list + [df_local]
-        df = pd.concat(local_df_list, axis=0, ignore_index=True)
-        df.to_pickle(fname)
-
-    return df
 
 if __name__ == '__main__':
     with torch.no_grad():
@@ -145,10 +133,9 @@ if __name__ == '__main__':
         maxiters = int(1e5)
         num_grid_hbb = 200
         deltas_precomputed = [0.001, 0.01, 0.05, 0.1]
-        bounds = ['CLT','HBB','WSR']
+        bounds = ['HB']
         lambdas_example_table = np.linspace(-1,0,1000)
 
         dfs = []
         for bound in bounds:
             dfs = dfs + [experiment(gamma, delta, num_trials, num_calib, num_lam, output_dir, bound, deltas_precomputed, num_grid_hbb, ub, ub_sigma, epsilon, maxiters, lambdas_example_table)]
-        plot_histograms(dfs, gamma, delta, num_calib, output_dir)

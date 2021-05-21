@@ -102,7 +102,6 @@ def empirical_risk_01(T, risk_mass, masks): # lambda in [-1,0]
     F.relu(result, inplace=True) 
     result = result.to(float).sum(dim=1).sum(dim=1)/masks.sum(dim=1).sum(dim=1) # Normalize by the size of the tumor.
     return result.mean().item(), result.std().item() #first and second moments needed for some bounds 
-
 def risk_mass_01(sigmoids):
     return sigmoids
 
@@ -114,6 +113,12 @@ def get_lambda_hat_clt_01(sigmoids, masks, gamma, delta, num_lam, lam_lim):
         t = -norm.ppf(delta)*sigmahat/np.sqrt(sigmoids.shape[0]) 
         return Rhat + t - gamma
     return brentq(_condition, -0.01, -0.99, xtol=1e-3, rtol=1e-3) 
+
+def get_lambda_hat_conformal(sigmoids, masks, gamma, delta):
+    risk_mass = risk_mass_01(sigmoids)
+    pdb.set_trace()
+    lowest_risk_mass_per_polyp = np.array([(sigmoids[i][masks[i]==1]).min() for i in range(masks.shape[0])])
+    return -np.quantile(lowest_risk_mass_per_polyp, delta)
 
 # TODO: Rewrite this with brentq
 #def get_lambda_hat_01(sigmoids, masks, gamma, delta, num_lam, lam_lim):
