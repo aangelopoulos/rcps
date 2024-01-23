@@ -39,6 +39,9 @@ def get_example_loss_and_size_tables(scores, labels, losses, lambdas_example_tab
 
     return loss_table, sizes_table
 
+def weighted_loss(est_labels, labels, losses):
+    return (est_labels * labels * losses[None,:]).sum(dim=1)
+
 def trial_precomputed(example_loss_table, example_size_table, lambdas_example_table, gamma, delta, num_lam, num_calib, batch_size, tlambda, bound_str):
     total=example_loss_table.shape[0]
     perm = torch.randperm(example_loss_table.shape[0])
@@ -60,8 +63,8 @@ def plot_histograms(df_list,gamma,delta,bounds_to_plot):
     minrisk = min([df['risk'].min() for df in df_list])
     maxrisk = min([df['risk'].max() for df in df_list])
 
-    risk_bins = np.arange(minrisk, maxrisk, 0.001) 
-    
+    risk_bins = np.arange(minrisk, maxrisk, 0.001)
+
     for i in range(len(df_list)):
         df = df_list[i]
         print(f"gamma:{gamma}, delta:{delta}, bound:{bounds_to_plot[i]}, coverage:{(df.risk > gamma).mean()}")
@@ -77,7 +80,7 @@ def plot_histograms(df_list,gamma,delta,bounds_to_plot):
         lofb = sizes.min() - float(d)/2
         rolb = sizes.max() + float(d)/2
         axs[1].hist(sizes, np.arange(lofb,rolb+d, d), label='RCPS-' + bounds_to_plot[i], alpha=0.7, density=True)
-    
+
     axs[0].set_xlabel('risk')
     axs[0].locator_params(axis='x', nbins=5)
     axs[0].set_ylabel('density')
@@ -100,7 +103,7 @@ def experiment(losses,gamma,delta,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,lam
         if bound_str == 'Bentkus':
             bound_fn = bentkus_mu_plus
         elif bound_str == 'CLT':
-            bound_fn = None 
+            bound_fn = None
         elif bound_str == 'HB':
             bound_fn = HB_mu_plus
         elif bound_str == 'HBB':
@@ -119,17 +122,17 @@ def experiment(losses,gamma,delta,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,lam
         except FileNotFoundError:
             dataset_precomputed = get_logits_dataset('ResNet152', 'Imagenet', imagenet_val_dir)
             print('Dataset loaded')
-            
+
             classes_array = get_imagenet_classes()
             T = platt_logits(dataset_precomputed)
-            
+
             logits, labels = dataset_precomputed.tensors
             scores = (logits/T.cpu()).softmax(dim=1)
 
             with torch.no_grad():
                 example_loss_table, example_size_table = get_example_loss_and_size_tables(scores, labels, losses, lambdas_example_table, num_calib)
                 tlambda = get_tlambda(num_lam,deltas,num_calib,num_grid_hbb,ub,ub_sigma,epsilon,maxiters,bound_str.lower(), bound_fn)
-                
+
                 local_df_list = []
                 for i in tqdm(range(num_trials)):
                     risk, sizes, lhat = trial_precomputed(example_loss_table, example_size_table, lambdas_example_table, gamma, delta, num_lam, num_calib, batch_size, tlambda, bound_str)
@@ -149,7 +152,7 @@ def experiment(losses,gamma,delta,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,lam
     plot_histograms(df_list,gamma,delta,bounds_to_plot)
 
 def platt_logits(calib_dataset, max_iters=10, lr=0.01, epsilon=0.01):
-    calib_loader = torch.utils.data.DataLoader(calib_dataset, batch_size=1024, shuffle=False, pin_memory=True) 
+    calib_loader = torch.utils.data.DataLoader(calib_dataset, batch_size=1024, shuffle=False, pin_memory=True)
     nll_criterion = nn.CrossEntropyLoss().cuda()
 
     T = nn.Parameter(torch.Tensor([1.3]).cuda())
@@ -167,7 +170,7 @@ def platt_logits(calib_dataset, max_iters=10, lr=0.01, epsilon=0.01):
             optimizer.step()
         if abs(T_old - T.item()) < epsilon:
             break
-    return T 
+    return T
 
 if __name__ == "__main__":
     sns.set(palette='pastel',font='serif')
@@ -181,18 +184,18 @@ if __name__ == "__main__":
     gammas = [0.1,0.05]
     deltas = [0.1,0.1]
     params = list(zip(gammas,deltas))
-    num_lam = 1500 
-    num_calib = 30000 
+    num_lam = 1500
+    num_calib = 30000
     num_grid_hbb = 200
-    epsilon = 1e-10 
+    epsilon = 1e-10
     maxiters = int(1e5)
-    num_trials = 1000 
+    num_trials = 1000
     ub = 0.2
     ub_sigma = np.sqrt(2)
     lambdas_example_table = np.flip(np.linspace(0,1,1000), axis=0)
-    
+
     deltas_precomputed = [0.001, 0.01, 0.05, 0.1]
-    
+
     for gamma, delta in params:
-        print(f"\n\n\n ============           NEW EXPERIMENT gamma={gamma} delta={delta}           ============ \n\n\n") 
+        print(f"\n\n\n ============           NEW EXPERIMENT gamma={gamma} delta={delta}           ============ \n\n\n")
         experiment(losses,gamma,delta,num_lam,num_calib,num_grid_hbb,ub,ub_sigma,lambdas_example_table,epsilon,num_trials,maxiters,bounds_to_plot,imagenet_val_dir)
