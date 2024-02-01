@@ -40,7 +40,10 @@ def get_example_loss_and_size_tables(scores, labels, losses, lambdas_example_tab
     return loss_table, sizes_table
 
 def weighted_loss(est_labels, labels, losses):
-    return (est_labels * labels * losses[None,:]).sum(dim=1)
+    current_labels = np.argmax(labels, axis=1)
+    mask = (est_labels[np.arange(len(labels)), current_labels] == 0)
+    weighted_loss = np.where(mask, losses[current_labels], 0)
+    return weighted_loss
 
 def trial_precomputed(example_loss_table, example_size_table, lambdas_example_table, gamma, delta, num_lam, num_calib, batch_size, tlambda, bound_str):
     total=example_loss_table.shape[0]
